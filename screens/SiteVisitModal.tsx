@@ -1,7 +1,17 @@
 import React, { useState } from "react";
-import { StyleSheet, View, TextInput, Alert, Pressable } from "react-native";
+import {
+  StyleSheet,
+  View,
+  TextInput,
+  Alert,
+  Pressable,
+  Platform,
+} from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
+import { Image } from "expo-image";
+import { Feather } from "@expo/vector-icons";
 
 import { ScreenKeyboardAwareScrollView } from "@/components/ScreenKeyboardAwareScrollView";
 import { ThemedText } from "@/components/ThemedText";
@@ -25,7 +35,117 @@ export default function SiteVisitModal({
 
   const [siteName, setSiteName] = useState("");
   const [notes, setNotes] = useState("");
+  const [photoUri, setPhotoUri] = useState<string | undefined>();
   const [isSaving, setIsSaving] = useState(false);
+
+  const handleTakePhoto = async () => {
+    if (Platform.OS === "web") {
+      Alert.alert(
+        "Not Available",
+        "Camera is available on mobile devices via Expo Go."
+      );
+      return;
+    }
+
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permissionResult.granted) {
+      if (!permissionResult.canAskAgain) {
+        Alert.alert(
+          "Permission Required",
+          "Camera access is required. Please enable it in Settings.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Open Settings",
+              onPress: async () => {
+                try {
+                  const { Linking } = await import("expo-linking");
+                  await Linking.openSettings();
+                } catch {
+                  Alert.alert("Error", "Unable to open Settings.");
+                }
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          "Permission Denied",
+          "Camera permission is required to take photos."
+        );
+      }
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setPhotoUri(result.assets[0].uri);
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const handleChoosePhoto = async () => {
+    if (Platform.OS === "web") {
+      Alert.alert(
+        "Not Available",
+        "Photo gallery is available on mobile devices via Expo Go."
+      );
+      return;
+    }
+
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      if (!permissionResult.canAskAgain) {
+        Alert.alert(
+          "Permission Required",
+          "Photo library access is required. Please enable it in Settings.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Open Settings",
+              onPress: async () => {
+                try {
+                  const { Linking } = await import("expo-linking");
+                  await Linking.openSettings();
+                } catch {
+                  Alert.alert("Error", "Unable to open Settings.");
+                }
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          "Permission Denied",
+          "Photo library permission is required to select photos."
+        );
+      }
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setPhotoUri(result.assets[0].uri);
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const handleRemovePhoto = () => {
+    setPhotoUri(undefined);
+  };
 
   const handleSave = async () => {
     if (!siteName.trim()) {
@@ -36,7 +156,11 @@ export default function SiteVisitModal({
     setIsSaving(true);
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      await recordSiteArrival(siteName.trim(), notes.trim() || undefined);
+      await recordSiteArrival(
+        siteName.trim(),
+        notes.trim() || undefined,
+        photoUri
+      );
       navigation.goBack();
     } catch (error) {
       Alert.alert("Error", "Failed to record site visit. Please try again.");
@@ -100,6 +224,71 @@ export default function SiteVisitModal({
         />
       </View>
 
+      <View style={styles.inputContainer}>
+        <ThemedText type="body" style={styles.inputLabel}>
+          Photo (Optional)
+        </ThemedText>
+        {photoUri ? (
+          <View style={styles.photoPreviewContainer}>
+            <Image
+              source={{ uri: photoUri }}
+              style={styles.photoPreview}
+              contentFit="cover"
+            />
+            <Pressable
+              onPress={handleRemovePhoto}
+              style={[
+                styles.removePhotoButton,
+                { backgroundColor: AppColors.error },
+              ]}
+            >
+              <Feather name="x" size={16} color="#FFFFFF" />
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.photoButtonsContainer}>
+            <Pressable
+              onPress={handleTakePhoto}
+              style={({ pressed }) => [
+                styles.photoButton,
+                {
+                  backgroundColor: theme.backgroundDefault,
+                  borderColor: theme.backgroundSecondary,
+                  opacity: pressed ? 0.8 : 1,
+                },
+              ]}
+            >
+              <Feather name="camera" size={24} color={AppColors.primary} />
+              <ThemedText
+                type="small"
+                style={[styles.photoButtonText, { color: theme.text }]}
+              >
+                Take Photo
+              </ThemedText>
+            </Pressable>
+            <Pressable
+              onPress={handleChoosePhoto}
+              style={({ pressed }) => [
+                styles.photoButton,
+                {
+                  backgroundColor: theme.backgroundDefault,
+                  borderColor: theme.backgroundSecondary,
+                  opacity: pressed ? 0.8 : 1,
+                },
+              ]}
+            >
+              <Feather name="image" size={24} color={AppColors.primary} />
+              <ThemedText
+                type="small"
+                style={[styles.photoButtonText, { color: theme.text }]}
+              >
+                Choose Photo
+              </ThemedText>
+            </Pressable>
+          </View>
+        )}
+      </View>
+
       <Pressable
         onPress={handleSave}
         disabled={isSaving}
@@ -150,6 +339,43 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     fontSize: 16,
     borderWidth: 1,
+  },
+  photoButtonsContainer: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  photoButton: {
+    flex: 1,
+    height: 80,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+  },
+  photoButtonText: {
+    fontWeight: "500",
+  },
+  photoPreviewContainer: {
+    position: "relative",
+    width: "100%",
+    height: 200,
+    borderRadius: BorderRadius.sm,
+    overflow: "hidden",
+  },
+  photoPreview: {
+    width: "100%",
+    height: "100%",
+  },
+  removePhotoButton: {
+    position: "absolute",
+    top: Spacing.sm,
+    right: Spacing.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
   saveButton: {
     height: Spacing.buttonHeight,

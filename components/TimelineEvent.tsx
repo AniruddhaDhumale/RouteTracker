@@ -1,10 +1,11 @@
 import React from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { Image } from "expo-image";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing, AppColors } from "@/constants/theme";
+import { Spacing, BorderRadius, AppColors } from "@/constants/theme";
 import { formatTime } from "@/utils/storage";
 
 export type EventType =
@@ -19,7 +20,9 @@ interface TimelineEventProps {
   time: number;
   title: string;
   subtitle?: string;
+  photoUri?: string;
   isLast?: boolean;
+  onPhotoPress?: (uri: string) => void;
 }
 
 const getEventConfig = (type: EventType) => {
@@ -62,10 +65,18 @@ export function TimelineEvent({
   time,
   title,
   subtitle,
+  photoUri,
   isLast = false,
+  onPhotoPress,
 }: TimelineEventProps) {
   const { theme } = useTheme();
   const config = getEventConfig(type);
+
+  const handlePhotoPress = () => {
+    if (photoUri && onPhotoPress) {
+      onPhotoPress(photoUri);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -104,6 +115,24 @@ export function TimelineEvent({
           >
             {subtitle}
           </ThemedText>
+        ) : null}
+        {photoUri ? (
+          <Pressable
+            onPress={handlePhotoPress}
+            style={({ pressed }) => [
+              styles.photoContainer,
+              { opacity: pressed && onPhotoPress ? 0.8 : 1 },
+            ]}
+          >
+            <Image
+              source={{ uri: photoUri }}
+              style={styles.photo}
+              contentFit="cover"
+            />
+            <View style={styles.photoOverlay}>
+              <Feather name="camera" size={12} color="#FFFFFF" />
+            </View>
+          </Pressable>
         ) : null}
       </View>
     </View>
@@ -151,5 +180,27 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     marginTop: Spacing.xs,
+  },
+  photoContainer: {
+    marginTop: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    overflow: "hidden",
+    width: 80,
+    height: 60,
+  },
+  photo: {
+    width: "100%",
+    height: "100%",
+  },
+  photoOverlay: {
+    position: "absolute",
+    bottom: Spacing.xs,
+    right: Spacing.xs,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

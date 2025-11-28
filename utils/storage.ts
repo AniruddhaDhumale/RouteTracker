@@ -22,6 +22,7 @@ export interface SiteVisit {
   tripId: string;
   siteName: string;
   notes?: string;
+  photoUri?: string;
   arrivalTime: number;
   arrivalLatitude: number;
   arrivalLongitude: number;

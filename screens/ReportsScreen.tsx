@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { StyleSheet, View, Pressable } from "react-native";
+import { StyleSheet, View, Pressable, Alert, Platform } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 
 import { ScreenScrollView } from "@/components/ScreenScrollView";
 import { StatCard } from "@/components/StatCard";
@@ -10,7 +12,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { useTripContext } from "@/context/TripContext";
 import { Spacing, BorderRadius, AppColors } from "@/constants/theme";
-import { formatDistance, formatAllowance, Trip } from "@/utils/storage";
+import { formatDistance, formatAllowance, formatDuration } from "@/utils/storage";
+import { exportTripsToCSV } from "@/utils/dataAccess";
 
 type DateRange = "week" | "month" | "all";
 
@@ -18,6 +21,7 @@ export default function ReportsScreen() {
   const { theme } = useTheme();
   const { trips, settings, loadData } = useTripContext();
   const [dateRange, setDateRange] = useState<DateRange>("week");
+  const [isExporting, setIsExporting] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -25,20 +29,25 @@ export default function ReportsScreen() {
     }, [loadData])
   );
 
-  const filteredTrips = useMemo(() => {
+  const getDateRangeBounds = useCallback(() => {
     const now = Date.now();
     const oneDay = 24 * 60 * 60 * 1000;
 
     switch (dateRange) {
       case "week":
-        return trips.filter((t) => now - t.startTime <= 7 * oneDay);
+        return { start: now - 7 * oneDay, end: now };
       case "month":
-        return trips.filter((t) => now - t.startTime <= 30 * oneDay);
+        return { start: now - 30 * oneDay, end: now };
       case "all":
       default:
-        return trips;
+        return { start: 0, end: now };
     }
-  }, [trips, dateRange]);
+  }, [dateRange]);
+
+  const filteredTrips = useMemo(() => {
+    const { start, end } = getDateRangeBounds();
+    return trips.filter((t) => t.startTime >= start && t.startTime <= end);
+  }, [trips, getDateRangeBounds]);
 
   const stats = useMemo(() => {
     const totalDistance = filteredTrips.reduce(
@@ -47,10 +56,19 @@ export default function ReportsScreen() {
     );
     const totalTrips = filteredTrips.length;
     const avgDistance = totalTrips > 0 ? totalDistance / totalTrips : 0;
-    const totalAllowance = totalDistance * settings.allowanceRate;
 
-    return { totalDistance, totalTrips, avgDistance, totalAllowance };
-  }, [filteredTrips, settings.allowanceRate]);
+    const rate = settings.useKilometers
+      ? settings.allowanceRate
+      : settings.allowanceRatePerMile || 0.8;
+    const totalAllowance = totalDistance * rate;
+
+    const totalDuration = filteredTrips.reduce((sum, t) => {
+      const end = t.endTime || Date.now();
+      return sum + (end - t.startTime);
+    }, 0);
+
+    return { totalDistance, totalTrips, avgDistance, totalAllowance, totalDuration };
+  }, [filteredTrips, settings]);
 
   const dailyStats = useMemo(() => {
     const days: { [key: string]: number } = {};
@@ -73,6 +91,51 @@ export default function ReportsScreen() {
 
     return { entries, maxDistance };
   }, [filteredTrips]);
+
+  const handleExportCSV = useCallback(async () => {
+    if (Platform.OS === "web") {
+      Alert.alert(
+        "Export Not Available",
+        "CSV export is only available on mobile devices via Expo Go."
+      );
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const { start, end } = getDateRangeBounds();
+      const csvContent = await exportTripsToCSV(start, end);
+
+      const dateStr = new Date().toISOString().split("T")[0];
+      const rangeLabel = dateRange === "all" ? "all-time" : dateRange;
+      const fileName = `trip-report-${rangeLabel}-${dateStr}.csv`;
+      const filePath = `${FileSystem.documentDirectory}${fileName}`;
+
+      await FileSystem.writeAsStringAsync(filePath, csvContent, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(filePath, {
+          mimeType: "text/csv",
+          dialogTitle: "Export Trip Report",
+          UTI: "public.comma-separated-values-text",
+        });
+      } else {
+        Alert.alert(
+          "Export Complete",
+          `Report saved to: ${fileName}`,
+          [{ text: "OK" }]
+        );
+      }
+    } catch (error) {
+      console.error("Export error:", error);
+      Alert.alert("Export Failed", "There was an error exporting your trip data.");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [dateRange, getDateRangeBounds]);
 
   const DateRangeButton = ({
     value,
@@ -138,7 +201,9 @@ export default function ReportsScreen() {
             title="Total Allowance"
             value={formatAllowance(
               stats.totalDistance,
-              settings.allowanceRate
+              settings.useKilometers
+                ? settings.allowanceRate
+                : settings.allowanceRatePerMile || 0.8
             )}
             icon="dollar-sign"
             iconColor={AppColors.accent}
@@ -157,6 +222,21 @@ export default function ReportsScreen() {
             value={formatDistance(stats.avgDistance, settings.useKilometers)}
             icon="trending-up"
             iconColor={AppColors.secondary}
+          />
+        </View>
+        <View style={styles.statsRow}>
+          <StatCard
+            title="Total Time"
+            value={formatDuration(0, stats.totalDuration)}
+            icon="clock"
+            iconColor={AppColors.info}
+          />
+          <View style={styles.statSpacer} />
+          <StatCard
+            title="Site Visits"
+            value={filteredTrips.reduce((sum, t) => sum + t.siteVisits.length, 0).toString()}
+            icon="map-pin"
+            iconColor={AppColors.error}
           />
         </View>
       </View>
@@ -203,6 +283,46 @@ export default function ReportsScreen() {
           </View>
         </View>
       ) : null}
+
+      <Pressable
+        onPress={handleExportCSV}
+        disabled={isExporting || filteredTrips.length === 0}
+        style={({ pressed }) => [
+          styles.exportButton,
+          {
+            backgroundColor: isExporting
+              ? theme.backgroundSecondary
+              : AppColors.primary,
+            opacity: pressed ? 0.8 : 1,
+          },
+        ]}
+      >
+        <Feather
+          name={isExporting ? "loader" : "download"}
+          size={20}
+          color="#FFFFFF"
+        />
+        <ThemedText style={styles.exportButtonText}>
+          {isExporting ? "Exporting..." : "Export to CSV"}
+        </ThemedText>
+      </Pressable>
+
+      {filteredTrips.length === 0 ? (
+        <View
+          style={[
+            styles.noDataContainer,
+            { backgroundColor: theme.backgroundSecondary },
+          ]}
+        >
+          <Feather name="info" size={20} color={theme.textSecondary} />
+          <ThemedText
+            type="small"
+            style={[styles.noDataText, { color: theme.textSecondary }]}
+          >
+            No trips found in this date range.
+          </ThemedText>
+        </View>
+      ) : null}
     </ScreenScrollView>
   );
 }
@@ -236,6 +356,7 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
+    marginBottom: Spacing.lg,
   },
   chartTitle: {
     marginBottom: Spacing.md,
@@ -264,5 +385,30 @@ const styles = StyleSheet.create({
   barLabel: {
     marginTop: Spacing.xs,
     fontSize: 10,
+  },
+  exportButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  exportButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  noDataContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  noDataText: {
+    textAlign: "center",
   },
 });

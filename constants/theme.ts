@@ -8,6 +8,8 @@ export const AppColors = {
   accent: "#2196F3",
   accentLight: "#E3F2FD",
   warning: "#FF9800",
+  info: "#03A9F4",
+  error: "#E91E63",
   divider: "#E0E0E0",
 };
 

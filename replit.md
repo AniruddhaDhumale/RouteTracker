@@ -15,8 +15,10 @@ RouteTracker is a mobile application designed for workers to track their actual 
 - **Framework**: React Native with Expo SDK 54
 - **Navigation**: React Navigation 7 with bottom tabs
 - **State Management**: React Context + Custom Hooks
-- **Storage**: AsyncStorage for local persistence
+- **Storage**: SQLite (native) + AsyncStorage (web fallback)
 - **Location**: expo-location for GPS tracking
+- **Maps**: react-native-maps (native) with web fallback
+- **Media**: expo-image-picker for photo capture
 
 ### Directory Structure
 ```
@@ -35,8 +37,10 @@ RouteTracker is a mobile application designed for workers to track their actual 
 │   ├── HeaderTitle.tsx       # Custom header with logo
 │   ├── SettingsItem.tsx      # Settings list item
 │   ├── StatCard.tsx          # Stats display card
-│   ├── TimelineEvent.tsx     # Timeline event display
-│   └── TripCard.tsx          # Trip history card
+│   ├── TimelineEvent.tsx     # Timeline event with photo support
+│   ├── TripCard.tsx          # Trip history card
+│   ├── TripMap.native.tsx    # Native map with MapView (iOS/Android)
+│   └── TripMap.web.tsx       # Web fallback for maps
 ├── constants/theme.ts        # Design tokens and colors
 ├── context/TripContext.tsx   # Trip state context provider
 ├── hooks/
@@ -56,24 +60,33 @@ RouteTracker is a mobile application designed for workers to track their actual 
 │   ├── ProfileScreen.tsx     # User settings
 │   ├── TripDetailsScreen.tsx # Individual trip details
 │   └── SiteVisitModal.tsx    # Site visit recording
-└── utils/storage.ts          # Data storage utilities
+└── utils/
+    ├── storage.ts            # Data types, Haversine formula, formatters
+    ├── database.ts           # SQLite database operations (native)
+    └── dataAccess.ts         # Unified data layer (SQLite + AsyncStorage)
 ```
 
 ### Key Features
 1. **Trip Tracking**: Start/end trips with GPS location capture
 2. **Continuous GPS Logging**: Records coordinates during active trips
 3. **Distance Calculation**: Uses Haversine formula on sequential GPS points
-4. **Site Visits**: Record arrival/departure at work sites
-5. **Timeline View**: Visual timeline of trip events
-6. **Travel Allowance**: Automatic calculation based on distance
-7. **Trip History**: View all past trips with details
-8. **Reports**: Statistics with daily/weekly/monthly views
-9. **Settings**: Configurable units, rates, and GPS frequency
+4. **Site Visits**: Record arrival/departure at work sites with photos
+5. **Photo Documentation**: Attach photos to site visits for proof of arrival
+6. **Route Visualization**: Interactive maps showing travel routes (native platforms)
+7. **Timeline View**: Visual timeline of trip events with embedded photos
+8. **Travel Allowance**: Automatic calculation with advanced rate settings
+9. **Trip History**: View all past trips with details
+10. **Reports**: Statistics with daily/weekly/monthly views and CSV export
+11. **Settings**: Configurable units, rates, GPS frequency, and allowance rules
 
 ## User Preferences
 - Distance units: Kilometers (default) or Miles
 - Allowance rate: Configurable per km/mile
 - GPS update frequency: Low (30s), Medium (15s), High (5s)
+- Advanced Allowance Settings:
+  - Rate Per Mile: Used for US/Imperial units (default $0.80)
+  - Min Distance for Allowance: Minimum travel distance before allowance applies
+  - Max Daily Allowance: Cap on total daily travel reimbursement
 
 ## Recent Changes
 - Initial MVP implementation (November 2024)
@@ -81,6 +94,15 @@ RouteTracker is a mobile application designed for workers to track their actual 
 - Implemented all 4 tabs: Today, History, Reports, Profile
 - Added real-time GPS tracking with Haversine distance calculation
 - Local storage persistence for trips, GPS points, site visits
+- Added SQLite database support for native platforms (expo-sqlite)
+- Implemented platform-specific TripMap component (TripMap.native.tsx / TripMap.web.tsx)
+- Added photo attachment functionality for site visits using expo-image-picker
+- Implemented advanced allowance settings:
+  - Rate per mile (for US/Imperial units)
+  - Minimum distance threshold for allowance
+  - Maximum daily allowance cap
+- Updated ProfileScreen with Extended Allowance Settings section
+- CSV export now available for trip data
 
 ## Running the App
 - **Development**: `npm run dev` starts Expo development server

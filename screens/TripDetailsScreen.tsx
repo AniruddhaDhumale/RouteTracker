@@ -6,6 +6,7 @@ import { ScreenScrollView } from "@/components/ScreenScrollView";
 import { StatCard } from "@/components/StatCard";
 import { TimelineEvent, EventType } from "@/components/TimelineEvent";
 import { ThemedText } from "@/components/ThemedText";
+import { TripMap } from "@/components/TripMap";
 import { useTheme } from "@/hooks/useTheme";
 import { useTripContext } from "@/context/TripContext";
 import { Spacing, BorderRadius, AppColors } from "@/constants/theme";
@@ -16,9 +17,8 @@ import {
   formatTime,
   formatDuration,
   formatDistance,
-  formatAllowance,
-  getSiteVisits,
 } from "@/utils/storage";
+import { getSiteVisits, formatAllowanceAdvanced } from "@/utils/dataAccess";
 import { HomeStackParamList } from "@/navigation/HomeStackNavigator";
 
 type TripDetailsScreenProps = NativeStackScreenProps<
@@ -32,6 +32,7 @@ interface TimelineEventData {
   time: number;
   title: string;
   subtitle?: string;
+  photoUri?: string;
 }
 
 export default function TripDetailsScreen({
@@ -79,6 +80,7 @@ export default function TripDetailsScreen({
         time: visit.arrivalTime,
         title: `Arrived at ${visit.siteName}`,
         subtitle: visit.notes,
+        photoUri: visit.photoUri,
       });
 
       if (visit.departureTime) {
@@ -129,6 +131,11 @@ export default function TripDetailsScreen({
         </ThemedText>
       </View>
 
+      <ThemedText type="h4" style={styles.sectionTitle}>
+        Route Map
+      </ThemedText>
+      <TripMap trip={trip} height={220} />
+
       <View style={styles.statsGrid}>
         <View style={styles.statsRow}>
           <StatCard
@@ -140,7 +147,7 @@ export default function TripDetailsScreen({
           <View style={styles.statSpacer} />
           <StatCard
             title="Travel Allowance"
-            value={formatAllowance(trip.totalDistance, settings.allowanceRate)}
+            value={formatAllowanceAdvanced(trip.totalDistance, settings)}
             icon="dollar-sign"
             iconColor={AppColors.accent}
           />
@@ -173,6 +180,7 @@ export default function TripDetailsScreen({
             time={event.time}
             title={event.title}
             subtitle={event.subtitle}
+            photoUri={event.photoUri}
             isLast={index === timelineEvents.length - 1}
           />
         ))}

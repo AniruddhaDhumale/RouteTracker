@@ -15,7 +15,8 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useTripContext } from "@/context/TripContext";
 import { Spacing, AppColors } from "@/constants/theme";
-import { formatDistance, formatAllowance, SiteVisit } from "@/utils/storage";
+import { formatDistance, SiteVisit } from "@/utils/storage";
+import { formatAllowanceAdvanced } from "@/utils/dataAccess";
 import { HomeStackParamList } from "@/navigation/HomeStackNavigator";
 import { useScreenInsets } from "@/hooks/useScreenInsets";
 
@@ -109,7 +110,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             if (completedTrip) {
               Alert.alert(
                 "Trip Completed",
-                `You traveled ${formatDistance(completedTrip.totalDistance, settings.useKilometers)} and earned ${formatAllowance(completedTrip.totalDistance, settings.allowanceRate)}.`
+                `You traveled ${formatDistance(completedTrip.totalDistance, settings.useKilometers)} and earned ${formatAllowanceAdvanced(completedTrip.totalDistance, settings)}.`
               );
             }
           } catch (error) {
@@ -209,7 +210,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           <View style={styles.statSpacer} />
           <StatCard
             title="Allowance"
-            value={formatAllowance(todaysDistance, settings.allowanceRate)}
+            value={`$${todaysAllowance.toFixed(2)}`}
             icon="dollar-sign"
             iconColor={AppColors.accent}
           />

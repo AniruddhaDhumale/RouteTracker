@@ -5,8 +5,13 @@ import {
   Trip,
   GPSPoint,
   SiteVisit,
-  UserSettings,
+  calculateTotalDistance,
+  generateId,
+} from "@/utils/storage";
+import {
+  initializeDataLayer,
   getTrips,
+  saveTrip,
   saveTrips,
   getActiveTrip,
   saveActiveTrip,
@@ -15,16 +20,16 @@ import {
   getSiteVisits,
   saveSiteVisit,
   getUserSettings,
-  calculateTotalDistance,
-  generateId,
-} from "@/utils/storage";
+  saveUserSettings,
+  ExtendedUserSettings,
+} from "@/utils/dataAccess";
 
 export interface TripState {
   trips: Trip[];
   activeTrip: Trip | null;
   gpsPoints: GPSPoint[];
   siteVisits: SiteVisit[];
-  settings: UserSettings;
+  settings: ExtendedUserSettings;
   isLoading: boolean;
   locationPermission: boolean;
   currentLocation: Location.LocationObject | null;
@@ -42,6 +47,9 @@ export function useTrip() {
       useKilometers: true,
       allowanceRate: 0.5,
       gpsUpdateFrequency: "medium",
+      allowanceRatePerMile: 0.8,
+      minDistanceForAllowance: 0,
+      maxDailyAllowance: 0,
     },
     isLoading: true,
     locationPermission: false,
@@ -52,6 +60,8 @@ export function useTrip() {
 
   const loadData = useCallback(async () => {
     try {
+      await initializeDataLayer();
+
       const [trips, activeTrip, settings] = await Promise.all([
         getTrips(),
         getActiveTrip(),
@@ -84,6 +94,10 @@ export function useTrip() {
   }, []);
 
   const requestLocationPermission = useCallback(async () => {
+    if (Platform.OS === "web") {
+      console.log("Location tracking not supported on web");
+      return false;
+    }
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       const granted = status === "granted";
@@ -96,6 +110,10 @@ export function useTrip() {
   }, []);
 
   const getCurrentLocation = useCallback(async () => {
+    if (Platform.OS === "web") {
+      console.log("Location tracking not supported on web");
+      return null;
+    }
     try {
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
@@ -110,8 +128,18 @@ export function useTrip() {
 
   const startLocationTracking = useCallback(
     async (tripId: string) => {
+      if (Platform.OS === "web") {
+        console.log("Location tracking not supported on web");
+        return;
+      }
+
       if (locationSubscription.current) {
-        locationSubscription.current.remove();
+        try {
+          locationSubscription.current.remove();
+        } catch (e) {
+          console.log("Error removing subscription:", e);
+        }
+        locationSubscription.current = null;
       }
 
       const intervalMap = {
@@ -176,12 +204,21 @@ export function useTrip() {
 
   const stopLocationTracking = useCallback(() => {
     if (locationSubscription.current) {
-      locationSubscription.current.remove();
+      try {
+        locationSubscription.current.remove();
+      } catch (e) {
+        console.log("Error removing location subscription:", e);
+      }
       locationSubscription.current = null;
     }
   }, []);
 
   const startTrip = useCallback(async () => {
+    if (Platform.OS === "web") {
+      console.log("Trip tracking not supported on web");
+      return null;
+    }
+
     const hasPermission = await requestLocationPermission();
     if (!hasPermission) {
       return null;
@@ -245,9 +282,9 @@ export function useTrip() {
       isActive: false,
     };
 
+    await saveTrip(completedTrip);
+    
     const updatedTrips = [...state.trips, completedTrip];
-    await saveTrips(updatedTrips);
-    await saveActiveTrip(null);
 
     setState((prev) => ({
       ...prev,
@@ -261,20 +298,21 @@ export function useTrip() {
   }, [state.activeTrip, state.trips, stopLocationTracking, getCurrentLocation]);
 
   const recordSiteArrival = useCallback(
-    async (siteName: string, notes?: string) => {
+    async (siteName: string, notes?: string, photoUri?: string) => {
       if (!state.activeTrip) return null;
 
       const location = await getCurrentLocation();
-      if (!location) return null;
+      if (!location && Platform.OS !== "web") return null;
 
       const visit: SiteVisit = {
         id: generateId(),
         tripId: state.activeTrip.id,
         siteName,
         notes,
+        photoUri,
         arrivalTime: Date.now(),
-        arrivalLatitude: location.coords.latitude,
-        arrivalLongitude: location.coords.longitude,
+        arrivalLatitude: location?.coords.latitude || 0,
+        arrivalLongitude: location?.coords.longitude || 0,
       };
 
       await saveSiteVisit(visit);
@@ -301,7 +339,6 @@ export function useTrip() {
       if (!state.activeTrip) return null;
 
       const location = await getCurrentLocation();
-      if (!location) return null;
 
       const visit = state.siteVisits.find((v) => v.id === visitId);
       if (!visit) return null;
@@ -309,8 +346,8 @@ export function useTrip() {
       const updatedVisit: SiteVisit = {
         ...visit,
         departureTime: Date.now(),
-        departureLatitude: location.coords.latitude,
-        departureLongitude: location.coords.longitude,
+        departureLatitude: location?.coords.latitude || visit.arrivalLatitude,
+        departureLongitude: location?.coords.longitude || visit.arrivalLongitude,
       };
 
       await saveSiteVisit(updatedVisit);
@@ -326,6 +363,15 @@ export function useTrip() {
     },
     [state.activeTrip, state.siteVisits, getCurrentLocation]
   );
+
+  const updateSettings = useCallback(async (newSettings: Partial<ExtendedUserSettings>) => {
+    const updatedSettings = { ...state.settings, ...newSettings };
+    await saveUserSettings(updatedSettings);
+    setState((prev) => ({
+      ...prev,
+      settings: updatedSettings,
+    }));
+  }, [state.settings]);
 
   const getTodaysTrips = useCallback(() => {
     const today = new Date();
@@ -346,8 +392,23 @@ export function useTrip() {
   }, [getTodaysTrips, state.activeTrip]);
 
   const getTodaysAllowance = useCallback(() => {
-    return getTodaysDistance() * state.settings.allowanceRate;
-  }, [getTodaysDistance, state.settings.allowanceRate]);
+    const distance = getTodaysDistance();
+    const rate = state.settings.useKilometers
+      ? state.settings.allowanceRate
+      : state.settings.allowanceRatePerMile || 0.8;
+    
+    let allowance = distance * rate;
+    
+    if (state.settings.minDistanceForAllowance && distance < state.settings.minDistanceForAllowance) {
+      allowance = 0;
+    }
+    
+    if (state.settings.maxDailyAllowance && state.settings.maxDailyAllowance > 0) {
+      allowance = Math.min(allowance, state.settings.maxDailyAllowance);
+    }
+    
+    return allowance;
+  }, [getTodaysDistance, state.settings]);
 
   useEffect(() => {
     loadData();
@@ -358,7 +419,7 @@ export function useTrip() {
   }, [loadData, stopLocationTracking]);
 
   useEffect(() => {
-    if (state.activeTrip && state.locationPermission) {
+    if (state.activeTrip && state.locationPermission && Platform.OS !== "web") {
       startLocationTracking(state.activeTrip.id);
     }
   }, [state.activeTrip?.id, state.locationPermission, startLocationTracking]);
@@ -369,6 +430,7 @@ export function useTrip() {
     endTrip,
     recordSiteArrival,
     recordSiteDeparture,
+    updateSettings,
     getTodaysTrips,
     getTodaysDistance,
     getTodaysAllowance,
