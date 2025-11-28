@@ -58,12 +58,12 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
       ) : null}
 
       <View style={styles.content}>
-        <ThemedText type="h1" style={styles.title}>
-          Something went wrong
+        <ThemedText type="h2" style={styles.title}>
+          RouteTracker Hit a Bump
         </ThemedText>
 
         <ThemedText type="body" style={styles.message}>
-          Please reload the app to continue.
+          Something unexpected happened. Tap below to get back on track.
         </ThemedText>
 
         <Pressable
@@ -81,7 +81,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
             type="body"
             style={[styles.buttonText, { color: theme.buttonText }]}
           >
-            Try Again
+            Restart RouteTracker
           </ThemedText>
         </Pressable>
       </View>
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     height: "100%",
     justifyContent: "center",
     alignItems: "center",
-    padding: Spacing["2xl"],
+    padding: Spacing.xl,
   },
   content: {
     alignItems: "center",
@@ -161,16 +161,14 @@ const styles = StyleSheet.create({
   },
   title: {
     textAlign: "center",
-    lineHeight: 40,
   },
   message: {
     textAlign: "center",
     opacity: 0.7,
-    lineHeight: 24,
   },
   topButton: {
     position: "absolute",
-    top: Spacing["2xl"] + Spacing.lg,
+    top: Spacing.xl + Spacing.lg,
     right: Spacing.lg,
     width: 44,
     height: 44,
@@ -183,7 +181,7 @@ const styles = StyleSheet.create({
   button: {
     paddingVertical: Spacing.lg,
     borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing["2xl"],
+    paddingHorizontal: Spacing.xl,
     minWidth: 200,
     shadowColor: "#000",
     shadowOffset: {

@@ -1,25 +1,25 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import ProfileScreen from "@/screens/ProfileScreen";
+import ReportsScreen from "@/screens/ReportsScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { getCommonScreenOptions } from "@/navigation/screenOptions";
 
-export type ProfileStackParamList = {
-  Profile: undefined;
+export type ReportsStackParamList = {
+  Reports: undefined;
 };
 
-const Stack = createNativeStackNavigator<ProfileStackParamList>();
+const Stack = createNativeStackNavigator<ReportsStackParamList>();
 
-export default function ProfileStackNavigator() {
+export default function ReportsStackNavigator() {
   const { theme, isDark } = useTheme();
 
   return (
     <Stack.Navigator screenOptions={getCommonScreenOptions({ theme, isDark })}>
       <Stack.Screen
-        name="Profile"
-        component={ProfileScreen}
+        name="Reports"
+        component={ReportsScreen}
         options={{
-          title: "Profile",
+          title: "Reports",
         }}
       />
     </Stack.Navigator>
