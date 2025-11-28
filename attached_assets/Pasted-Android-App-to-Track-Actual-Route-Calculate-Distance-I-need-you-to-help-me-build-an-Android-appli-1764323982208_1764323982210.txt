@@ -1,0 +1,115 @@
+Android App to Track Actual Route & Calculate Distance
+
+I need you to help me build an Android application with the following features.
+The main purpose of the app is to track the worker’s actual travel route using continuous GPS logging and calculate total distance based on the real path traveled, not just the difference between start and end points.
+
+📌 Core Functionalities
+1. Trip Tracking
+
+The app must allow the worker to track daily trips. A trip consists of:
+
+Start Trip → record timestamp + GPS location
+
+End Trip → record timestamp + GPS location
+
+Continuous GPS logging during the entire trip
+
+Calculate the total distance of the trip based on the ACTUAL route traveled (sum of all distances between sequential GPS coordinates)
+
+Calculate travel allowance automatically based on the total distance
+
+2. Site Visits
+
+During an active trip, the user can record site visits:
+
+Record arrival time + GPS location
+
+Record departure time + GPS location
+
+Associate these details with the current trip
+
+3. GPS Route Logging
+
+While a trip is active, the app must:
+
+Continuously capture GPS coordinates
+
+Save them into the local database
+
+Use them to compute the real distance traveled (e.g., using Haversine formula between each logged point)
+
+📱 User Interface
+Main Screen
+
+Shows:
+
+Total distance traveled today
+
+Total travel allowance earned
+
+Timeline of events (Leave Home → Arrive at Site → Depart Site → Return Home)
+
+Quick Action Buttons
+
+Start Trip ("Leave Home")
+
+Record Site Arrival ("Arrive at Site")
+
+End Trip ("Return Home")
+
+Site Details
+
+A floating action button to add site-specific notes or info.
+
+Bottom Navigation Tabs
+
+Trip History – list of all past trips
+
+Reports – summary or export functions
+
+Profile – user information and settings
+
+🗄️ Local Data Storage
+
+Use Room Database to store:
+
+Trip data
+
+Site visit details
+
+All GPS coordinates logged
+
+User info
+
+📍 Location Services
+
+Use Google Play Services (FusedLocationProviderClient):
+
+Request high-accuracy location
+
+Fetch continuous location updates
+
+Run efficiently in background when trip is active
+
+❗ Important Change From Original Description
+
+The app must not calculate distance as the straight-line difference between the start and end points.
+Instead, it must:
+
+Track the actual route traveled using continuous coordinates
+
+Calculate distance by summing point-to-point movement
+
+Produce the true real-world distance traveled by the worker
+
+🎯 Deliverables Needed
+
+Full Android Studio project (Kotlin preferred)
+
+Room database setup
+
+Location service helper
+
+UI screens
+
+Distance calculation algorithm using real route data
