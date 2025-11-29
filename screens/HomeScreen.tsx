@@ -62,26 +62,32 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const handleStartTrip = async () => {
     setIsStarting(true);
     try {
+      if (Platform.OS === "web") {
+        Alert.alert(
+          "Trip Tracking Not Available",
+          "Trip tracking requires GPS access which is not available on web. Please use Expo Go on a physical device or an emulator to track trips."
+        );
+        return;
+      }
+
       if (!locationPermission) {
         const granted = await requestLocationPermission();
         if (!granted) {
           Alert.alert(
             "Location Permission Required",
             "RouteTracker needs access to your location to track your trips. Please enable location access.",
-            Platform.OS !== "web"
-              ? [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Open Settings",
-                    onPress: async () => {
-                      try {
-                        await Linking.openSettings();
-                      } catch {
-                      }
-                    },
-                  },
-                ]
-              : [{ text: "OK" }]
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Open Settings",
+                onPress: async () => {
+                  try {
+                    await Linking.openSettings();
+                  } catch {
+                  }
+                },
+              },
+            ]
           );
           return;
         }
