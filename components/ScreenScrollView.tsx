@@ -29,6 +29,7 @@ export function ScreenScrollView({
         contentContainerStyle,
       ]}
       scrollIndicatorInsets={{ bottom: scrollInsetBottom }}
+      keyboardShouldPersistTaps="handled"
       {...scrollViewProps}
     >
       {children}

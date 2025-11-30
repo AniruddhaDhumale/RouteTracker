@@ -13,7 +13,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 
-import { ScreenKeyboardAwareScrollView } from "@/components/ScreenKeyboardAwareScrollView";
+import { AuthScrollView } from "@/components/AuthScrollView";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/context/AuthContext";
@@ -58,7 +58,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   };
 
   return (
-    <ScreenKeyboardAwareScrollView showsVerticalScrollIndicator={false}>
+    <AuthScrollView showsVerticalScrollIndicator={false}>
       <View style={styles.container}>
         <View style={styles.logoContainer}>
           <Image
@@ -186,7 +186,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           </Pressable>
         </View>
       </View>
-    </ScreenKeyboardAwareScrollView>
+    </AuthScrollView>
   );
 }
 

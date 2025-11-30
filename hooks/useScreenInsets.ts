@@ -15,5 +15,17 @@ export function useScreenInsets() {
     tabBarHeight,
     headerHeight,
     scrollInsetBottom: insets.bottom + 16,
+    insets,
+  };
+}
+
+export function useBasicInsets() {
+  const insets = useSafeAreaInsets();
+
+  return {
+    paddingTop: insets.top + Spacing.xl,
+    paddingBottom: insets.bottom + Spacing.xxl,
+    scrollInsetBottom: insets.bottom + 16,
+    insets,
   };
 }
