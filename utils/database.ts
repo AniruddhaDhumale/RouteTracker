@@ -67,6 +67,13 @@ export async function initializeDatabase(): Promise<void> {
       departureTime INTEGER,
       departureLatitude REAL,
       departureLongitude REAL,
+      schemeName TEXT,
+      schemeNumber TEXT,
+      esrDetails TEXT,
+      village TEXT,
+      issueReported TEXT,
+      resolution TEXT,
+      currentStatus TEXT,
       FOREIGN KEY (tripId) REFERENCES trips(id) ON DELETE CASCADE
     );
 
@@ -75,7 +82,7 @@ export async function initializeDatabase(): Promise<void> {
       workerName TEXT DEFAULT '',
       workerId TEXT DEFAULT '',
       useKilometers INTEGER DEFAULT 1,
-      allowanceRate REAL DEFAULT 0.5,
+      allowanceRate REAL DEFAULT 3.5,
       gpsUpdateFrequency TEXT DEFAULT 'medium',
       allowanceRatePerMile REAL DEFAULT 0.8,
       minDistanceForAllowance REAL DEFAULT 0,
@@ -254,6 +261,13 @@ export async function getSiteVisitsFromDB(tripId: string): Promise<SiteVisit[]> 
     departureTime: number | null;
     departureLatitude: number | null;
     departureLongitude: number | null;
+    schemeName: string | null;
+    schemeNumber: string | null;
+    esrDetails: string | null;
+    village: string | null;
+    issueReported: string | null;
+    resolution: string | null;
+    currentStatus: string | null;
   }>(
     "SELECT * FROM site_visits WHERE tripId = ? ORDER BY arrivalTime ASC",
     [tripId]
@@ -271,6 +285,13 @@ export async function getSiteVisitsFromDB(tripId: string): Promise<SiteVisit[]> 
     departureTime: v.departureTime || undefined,
     departureLatitude: v.departureLatitude || undefined,
     departureLongitude: v.departureLongitude || undefined,
+    schemeName: v.schemeName || undefined,
+    schemeNumber: v.schemeNumber || undefined,
+    esrDetails: v.esrDetails || undefined,
+    village: v.village || undefined,
+    issueReported: v.issueReported || undefined,
+    resolution: v.resolution || undefined,
+    currentStatus: v.currentStatus || undefined,
   }));
 }
 
@@ -278,8 +299,8 @@ export async function saveSiteVisitToDB(visit: SiteVisit & { photoUri?: string }
   const database = await getDatabase();
   await database.runAsync(
     `INSERT OR REPLACE INTO site_visits 
-     (id, tripId, siteName, notes, photoUri, arrivalTime, arrivalLatitude, arrivalLongitude, departureTime, departureLatitude, departureLongitude) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (id, tripId, siteName, notes, photoUri, arrivalTime, arrivalLatitude, arrivalLongitude, departureTime, departureLatitude, departureLongitude, schemeName, schemeNumber, esrDetails, village, issueReported, resolution, currentStatus) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       visit.id,
       visit.tripId,
@@ -292,6 +313,13 @@ export async function saveSiteVisitToDB(visit: SiteVisit & { photoUri?: string }
       visit.departureTime || null,
       visit.departureLatitude || null,
       visit.departureLongitude || null,
+      visit.schemeName || null,
+      visit.schemeNumber || null,
+      visit.esrDetails || null,
+      visit.village || null,
+      visit.issueReported || null,
+      visit.resolution || null,
+      visit.currentStatus || null,
     ]
   );
 }
@@ -310,6 +338,13 @@ export async function getAllSiteVisitsFromDB(): Promise<SiteVisit[]> {
     departureTime: number | null;
     departureLatitude: number | null;
     departureLongitude: number | null;
+    schemeName: string | null;
+    schemeNumber: string | null;
+    esrDetails: string | null;
+    village: string | null;
+    issueReported: string | null;
+    resolution: string | null;
+    currentStatus: string | null;
   }>("SELECT * FROM site_visits ORDER BY arrivalTime DESC");
 
   return visits.map((v) => ({
@@ -324,6 +359,13 @@ export async function getAllSiteVisitsFromDB(): Promise<SiteVisit[]> {
     departureTime: v.departureTime || undefined,
     departureLatitude: v.departureLatitude || undefined,
     departureLongitude: v.departureLongitude || undefined,
+    schemeName: v.schemeName || undefined,
+    schemeNumber: v.schemeNumber || undefined,
+    esrDetails: v.esrDetails || undefined,
+    village: v.village || undefined,
+    issueReported: v.issueReported || undefined,
+    resolution: v.resolution || undefined,
+    currentStatus: v.currentStatus || undefined,
   }));
 }
 
@@ -351,7 +393,7 @@ export async function getUserSettingsFromDB(): Promise<ExtendedUserSettings> {
       workerName: "",
       workerId: "",
       useKilometers: true,
-      allowanceRate: 0.5,
+      allowanceRate: 3.5,
       gpsUpdateFrequency: "medium" as const,
       allowanceRatePerMile: 0.8,
       minDistanceForAllowance: 0,

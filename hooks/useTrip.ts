@@ -45,7 +45,7 @@ export function useTrip() {
       workerName: "",
       workerId: "",
       useKilometers: true,
-      allowanceRate: 0.5,
+      allowanceRate: 3.5,
       gpsUpdateFrequency: "medium",
       allowanceRatePerMile: 0.8,
       minDistanceForAllowance: 0,
@@ -298,7 +298,20 @@ export function useTrip() {
   }, [state.activeTrip, state.trips, stopLocationTracking, getCurrentLocation]);
 
   const recordSiteArrival = useCallback(
-    async (siteName: string, notes?: string, photoUri?: string) => {
+    async (
+      siteName: string,
+      notes?: string,
+      photoUri?: string,
+      additionalFields?: {
+        schemeName?: string;
+        schemeNumber?: string;
+        esrDetails?: string;
+        village?: string;
+        issueReported?: string;
+        resolution?: string;
+        currentStatus?: string;
+      }
+    ) => {
       if (!state.activeTrip) return null;
 
       const location = await getCurrentLocation();
@@ -313,6 +326,13 @@ export function useTrip() {
         arrivalTime: Date.now(),
         arrivalLatitude: location?.coords.latitude || 0,
         arrivalLongitude: location?.coords.longitude || 0,
+        schemeName: additionalFields?.schemeName,
+        schemeNumber: additionalFields?.schemeNumber,
+        esrDetails: additionalFields?.esrDetails,
+        village: additionalFields?.village,
+        issueReported: additionalFields?.issueReported,
+        resolution: additionalFields?.resolution,
+        currentStatus: additionalFields?.currentStatus,
       };
 
       await saveSiteVisit(visit);

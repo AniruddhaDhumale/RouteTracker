@@ -6,6 +6,7 @@ import {
   Alert,
   Pressable,
   Platform,
+  ScrollView,
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Haptics from "expo-haptics";
@@ -25,6 +26,8 @@ type SiteVisitModalProps = NativeStackScreenProps<
   "SiteVisit"
 >;
 
+const STATUS_OPTIONS = ["Pending", "In Progress", "Resolved", "Live", "Closed"];
+
 export default function SiteVisitModal({
   navigation,
   route,
@@ -33,10 +36,17 @@ export default function SiteVisitModal({
   const { recordSiteArrival } = useTripContext();
   const { mode } = route.params;
 
-  const [siteName, setSiteName] = useState("");
+  const [schemeName, setSchemeName] = useState("");
+  const [schemeNumber, setSchemeNumber] = useState("");
+  const [esrDetails, setEsrDetails] = useState("");
+  const [village, setVillage] = useState("");
+  const [issueReported, setIssueReported] = useState("");
+  const [resolution, setResolution] = useState("");
+  const [currentStatus, setCurrentStatus] = useState("");
   const [notes, setNotes] = useState("");
   const [photoUri, setPhotoUri] = useState<string | undefined>();
   const [isSaving, setIsSaving] = useState(false);
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
 
   const handleTakePhoto = async () => {
     if (Platform.OS === "web") {
@@ -148,8 +158,13 @@ export default function SiteVisitModal({
   };
 
   const handleSave = async () => {
-    if (!siteName.trim()) {
-      Alert.alert("Error", "Please enter a site name.");
+    if (!schemeName.trim()) {
+      Alert.alert("Error", "Please enter the Scheme Name.");
+      return;
+    }
+
+    if (!village.trim()) {
+      Alert.alert("Error", "Please enter the Village name.");
       return;
     }
 
@@ -157,9 +172,18 @@ export default function SiteVisitModal({
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await recordSiteArrival(
-        siteName.trim(),
+        schemeName.trim(),
         notes.trim() || undefined,
-        photoUri
+        photoUri,
+        {
+          schemeName: schemeName.trim(),
+          schemeNumber: schemeNumber.trim() || undefined,
+          esrDetails: esrDetails.trim() || undefined,
+          village: village.trim(),
+          issueReported: issueReported.trim() || undefined,
+          resolution: resolution.trim() || undefined,
+          currentStatus: currentStatus || undefined,
+        }
       );
       navigation.goBack();
     } catch (error) {
@@ -167,6 +191,11 @@ export default function SiteVisitModal({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const selectStatus = (status: string) => {
+    setCurrentStatus(status);
+    setShowStatusPicker(false);
   };
 
   return (
@@ -182,7 +211,7 @@ export default function SiteVisitModal({
 
       <View style={styles.inputContainer}>
         <ThemedText type="body" style={styles.inputLabel}>
-          Site Name
+          Scheme Name <ThemedText style={styles.required}>*</ThemedText>
         </ThemedText>
         <TextInput
           style={[
@@ -193,9 +222,9 @@ export default function SiteVisitModal({
               borderColor: theme.backgroundSecondary,
             },
           ]}
-          value={siteName}
-          onChangeText={setSiteName}
-          placeholder="e.g., Office Building A"
+          value={schemeName}
+          onChangeText={setSchemeName}
+          placeholder="e.g., Jal Jeevan Mission"
           placeholderTextColor={theme.textSecondary}
           autoFocus
         />
@@ -203,7 +232,173 @@ export default function SiteVisitModal({
 
       <View style={styles.inputContainer}>
         <ThemedText type="body" style={styles.inputLabel}>
-          Notes (Optional)
+          Scheme Number
+        </ThemedText>
+        <TextInput
+          style={[
+            styles.input,
+            {
+              backgroundColor: theme.backgroundDefault,
+              color: theme.text,
+              borderColor: theme.backgroundSecondary,
+            },
+          ]}
+          value={schemeNumber}
+          onChangeText={setSchemeNumber}
+          placeholder="e.g., 11111111"
+          placeholderTextColor={theme.textSecondary}
+          keyboardType="default"
+        />
+      </View>
+
+      <View style={styles.inputContainer}>
+        <ThemedText type="body" style={styles.inputLabel}>
+          ESR Details
+        </ThemedText>
+        <TextInput
+          style={[
+            styles.input,
+            {
+              backgroundColor: theme.backgroundDefault,
+              color: theme.text,
+              borderColor: theme.backgroundSecondary,
+            },
+          ]}
+          value={esrDetails}
+          onChangeText={setEsrDetails}
+          placeholder="e.g., Existing 5.5 LL"
+          placeholderTextColor={theme.textSecondary}
+        />
+      </View>
+
+      <View style={styles.inputContainer}>
+        <ThemedText type="body" style={styles.inputLabel}>
+          Village <ThemedText style={styles.required}>*</ThemedText>
+        </ThemedText>
+        <TextInput
+          style={[
+            styles.input,
+            {
+              backgroundColor: theme.backgroundDefault,
+              color: theme.text,
+              borderColor: theme.backgroundSecondary,
+            },
+          ]}
+          value={village}
+          onChangeText={setVillage}
+          placeholder="e.g., Saoner"
+          placeholderTextColor={theme.textSecondary}
+        />
+      </View>
+
+      <View style={styles.inputContainer}>
+        <ThemedText type="body" style={styles.inputLabel}>
+          Issue Reported
+        </ThemedText>
+        <TextInput
+          style={[
+            styles.textArea,
+            {
+              backgroundColor: theme.backgroundDefault,
+              color: theme.text,
+              borderColor: theme.backgroundSecondary,
+            },
+          ]}
+          value={issueReported}
+          onChangeText={setIssueReported}
+          placeholder="e.g., Flow Meter Not Connected"
+          placeholderTextColor={theme.textSecondary}
+          multiline
+          numberOfLines={2}
+          textAlignVertical="top"
+        />
+      </View>
+
+      <View style={styles.inputContainer}>
+        <ThemedText type="body" style={styles.inputLabel}>
+          Resolution
+        </ThemedText>
+        <TextInput
+          style={[
+            styles.textArea,
+            {
+              backgroundColor: theme.backgroundDefault,
+              color: theme.text,
+              borderColor: theme.backgroundSecondary,
+            },
+          ]}
+          value={resolution}
+          onChangeText={setResolution}
+          placeholder="e.g., Restart Modem"
+          placeholderTextColor={theme.textSecondary}
+          multiline
+          numberOfLines={2}
+          textAlignVertical="top"
+        />
+      </View>
+
+      <View style={styles.inputContainer}>
+        <ThemedText type="body" style={styles.inputLabel}>
+          Current Status
+        </ThemedText>
+        <Pressable
+          onPress={() => setShowStatusPicker(!showStatusPicker)}
+          style={[
+            styles.statusSelector,
+            {
+              backgroundColor: theme.backgroundDefault,
+              borderColor: theme.backgroundSecondary,
+            },
+          ]}
+        >
+          <ThemedText
+            type="body"
+            style={{ color: currentStatus ? theme.text : theme.textSecondary }}
+          >
+            {currentStatus || "Select Status"}
+          </ThemedText>
+          <Feather
+            name={showStatusPicker ? "chevron-up" : "chevron-down"}
+            size={20}
+            color={theme.textSecondary}
+          />
+        </Pressable>
+        {showStatusPicker ? (
+          <View
+            style={[
+              styles.statusOptions,
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderColor: theme.backgroundSecondary,
+              },
+            ]}
+          >
+            {STATUS_OPTIONS.map((status) => (
+              <Pressable
+                key={status}
+                onPress={() => selectStatus(status)}
+                style={({ pressed }) => [
+                  styles.statusOption,
+                  {
+                    backgroundColor: pressed
+                      ? theme.backgroundSecondary
+                      : "transparent",
+                  },
+                ]}
+              >
+                <ThemedText type="body">{status}</ThemedText>
+                {currentStatus === status ? (
+                  <Feather name="check" size={18} color={AppColors.primary} />
+                ) : null}
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.inputContainer}>
+        <ThemedText type="body" style={styles.inputLabel}>
+          Additional Notes (Optional)
         </ThemedText>
         <TextInput
           style={[
@@ -216,10 +411,10 @@ export default function SiteVisitModal({
           ]}
           value={notes}
           onChangeText={setNotes}
-          placeholder="Add any notes about this site visit..."
+          placeholder="Add any additional notes about this site visit..."
           placeholderTextColor={theme.textSecondary}
           multiline
-          numberOfLines={4}
+          numberOfLines={3}
           textAlignVertical="top"
         />
       </View>
@@ -319,11 +514,14 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   inputContainer: {
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   inputLabel: {
     marginBottom: Spacing.sm,
     fontWeight: "500",
+  },
+  required: {
+    color: AppColors.secondary,
   },
   input: {
     height: Spacing.inputHeight,
@@ -333,12 +531,35 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   textArea: {
-    minHeight: 100,
+    minHeight: 70,
     borderRadius: BorderRadius.sm,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
     fontSize: 16,
     borderWidth: 1,
+  },
+  statusSelector: {
+    height: Spacing.inputHeight,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.md,
+    fontSize: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  statusOptions: {
+    marginTop: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  statusOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
   photoButtonsContainer: {
     flexDirection: "row",

@@ -29,6 +29,13 @@ export interface SiteVisit {
   departureTime?: number;
   departureLatitude?: number;
   departureLongitude?: number;
+  schemeName?: string;
+  schemeNumber?: string;
+  esrDetails?: string;
+  village?: string;
+  issueReported?: string;
+  resolution?: string;
+  currentStatus?: string;
 }
 
 export interface Trip {
@@ -56,7 +63,7 @@ const defaultSettings: UserSettings = {
   workerName: "",
   workerId: "",
   useKilometers: true,
-  allowanceRate: 0.5,
+  allowanceRate: 3.5,
   gpsUpdateFrequency: "medium",
 };
 
@@ -244,7 +251,7 @@ export function formatDistance(km: number, useKilometers: boolean): string {
 
 export function formatAllowance(km: number, rate: number): string {
   const amount = km * rate;
-  return `$${amount.toFixed(2)}`;
+  return `Rs ${amount.toFixed(2)}`;
 }
 
 export function formatTime(timestamp: number): string {

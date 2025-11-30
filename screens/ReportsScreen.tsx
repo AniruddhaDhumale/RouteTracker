@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
-import { StyleSheet, View, Pressable, Alert, Platform } from "react-native";
+import { StyleSheet, View, Pressable, Alert, Platform, TextInput, Modal } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import * as FileSystem from "expo-file-system";
@@ -11,43 +11,89 @@ import { ThemedText } from "@/components/ThemedText";
 import { EmptyState } from "@/components/EmptyState";
 import { useTheme } from "@/hooks/useTheme";
 import { useTripContext } from "@/context/TripContext";
+import { useAuth } from "@/context/AuthContext";
 import { Spacing, BorderRadius, AppColors } from "@/constants/theme";
-import { formatDistance, formatAllowance, formatDuration } from "@/utils/storage";
-import { exportTripsToCSV } from "@/utils/dataAccess";
+import { formatDistance, formatDuration, SiteVisit, Trip } from "@/utils/storage";
+import { getAllSiteVisits, getTrips } from "@/utils/dataAccess";
 
-type DateRange = "week" | "month" | "all";
+type ReportType = "current" | "dateRange";
+
+function formatDateDDMMYYYY(timestamp: number): string {
+  const date = new Date(timestamp);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
+function parseDateDDMMYYYY(dateStr: string): number | null {
+  const parts = dateStr.split("-");
+  if (parts.length !== 3) return null;
+  const [day, month, year] = parts.map(Number);
+  if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+  const date = new Date(year, month - 1, day);
+  return date.getTime();
+}
 
 export default function ReportsScreen() {
   const { theme } = useTheme();
   const { trips, settings, loadData } = useTripContext();
-  const [dateRange, setDateRange] = useState<DateRange>("week");
+  const { user } = useAuth();
+  const [reportType, setReportType] = useState<ReportType>("current");
+  const [startDate, setStartDate] = useState(formatDateDDMMYYYY(Date.now()));
+  const [endDate, setEndDate] = useState(formatDateDDMMYYYY(Date.now()));
   const [isExporting, setIsExporting] = useState(false);
+  const [allSiteVisits, setAllSiteVisits] = useState<SiteVisit[]>([]);
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [tempStartDate, setTempStartDate] = useState("");
+  const [tempEndDate, setTempEndDate] = useState("");
 
   useFocusEffect(
     useCallback(() => {
       loadData();
+      loadSiteVisits();
     }, [loadData])
   );
 
-  const getDateRangeBounds = useCallback(() => {
-    const now = Date.now();
-    const oneDay = 24 * 60 * 60 * 1000;
+  const loadSiteVisits = async () => {
+    const visits = await getAllSiteVisits();
+    setAllSiteVisits(visits);
+  };
 
-    switch (dateRange) {
-      case "week":
-        return { start: now - 7 * oneDay, end: now };
-      case "month":
-        return { start: now - 30 * oneDay, end: now };
-      case "all":
-      default:
-        return { start: 0, end: now };
+  const getDateRangeBounds = useCallback(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStart = today.getTime();
+    const todayEnd = todayStart + 24 * 60 * 60 * 1000 - 1;
+
+    if (reportType === "current") {
+      return { start: todayStart, end: todayEnd };
     }
-  }, [dateRange]);
+
+    const start = parseDateDDMMYYYY(startDate);
+    const end = parseDateDDMMYYYY(endDate);
+    
+    if (start && end) {
+      return { 
+        start, 
+        end: end + 24 * 60 * 60 * 1000 - 1 
+      };
+    }
+
+    return { start: todayStart, end: todayEnd };
+  }, [reportType, startDate, endDate]);
 
   const filteredTrips = useMemo(() => {
     const { start, end } = getDateRangeBounds();
     return trips.filter((t) => t.startTime >= start && t.startTime <= end);
   }, [trips, getDateRangeBounds]);
+
+  const filteredSiteVisits = useMemo(() => {
+    const { start, end } = getDateRangeBounds();
+    return allSiteVisits.filter(
+      (v) => v.arrivalTime >= start && v.arrivalTime <= end
+    );
+  }, [allSiteVisits, getDateRangeBounds]);
 
   const stats = useMemo(() => {
     const totalDistance = filteredTrips.reduce(
@@ -57,9 +103,7 @@ export default function ReportsScreen() {
     const totalTrips = filteredTrips.length;
     const avgDistance = totalTrips > 0 ? totalDistance / totalTrips : 0;
 
-    const rate = settings.useKilometers
-      ? settings.allowanceRate
-      : settings.allowanceRatePerMile || 0.8;
+    const rate = settings.allowanceRate || 3.5;
     const totalAllowance = totalDistance * rate;
 
     const totalDuration = filteredTrips.reduce((sum, t) => {
@@ -92,23 +136,95 @@ export default function ReportsScreen() {
     return { entries, maxDistance };
   }, [filteredTrips]);
 
+  const generateExcelContent = async (): Promise<string> => {
+    const allTrips = await getTrips();
+    const allVisits = await getAllSiteVisits();
+    const { start, end } = getDateRangeBounds();
+
+    const rangeTrips = allTrips.filter(
+      (t) => t.startTime >= start && t.startTime <= end
+    );
+
+    const employeeName = user?.name || "Unknown";
+    const employeeCode = user?.employeeId || "Unknown";
+    const rate = settings.allowanceRate || 3.5;
+
+    let csv = `Employee Name,${employeeName},Employee Code,${employeeCode}\n`;
+    csv += `Sr.No,Date,Scheme Name,Scheme Number,ESR Details,Village,Issue Reported,Resolution,Current Status,LAT,LONG,Km,Rate\n`;
+
+    let srNo = 1;
+    
+    for (const trip of rangeTrips) {
+      const tripVisits = allVisits.filter((v) => v.tripId === trip.id);
+      const tripDate = formatDateDDMMYYYY(trip.startTime);
+
+      csv += `${srNo},${tripDate},Home,,,,,,,,${trip.startLatitude.toFixed(6)},${trip.startLongitude.toFixed(6)},0,\n`;
+      srNo++;
+
+      for (const visit of tripVisits) {
+        const km = trip.totalDistance > 0 ? (trip.totalDistance / (tripVisits.length + 1)).toFixed(1) : "0";
+        const allowance = (parseFloat(km) * rate).toFixed(1);
+
+        csv += `${srNo},`;
+        csv += `${formatDateDDMMYYYY(visit.arrivalTime)},`;
+        csv += `"${visit.schemeName || visit.siteName}",`;
+        csv += `${visit.schemeNumber || ""},`;
+        csv += `"${visit.esrDetails || ""}",`;
+        csv += `"${visit.village || ""}",`;
+        csv += `"${visit.issueReported || ""}",`;
+        csv += `"${visit.resolution || ""}",`;
+        csv += `${visit.currentStatus || ""},`;
+        csv += `${visit.arrivalLatitude.toFixed(6)},`;
+        csv += `${visit.arrivalLongitude.toFixed(6)},`;
+        csv += `${km},`;
+        csv += `${allowance}\n`;
+        srNo++;
+      }
+
+      if (trip.endTime) {
+        const endKm = (trip.totalDistance / (tripVisits.length + 1)).toFixed(1);
+        const endAllowance = (parseFloat(endKm) * rate).toFixed(1);
+        csv += `${srNo},${tripDate},Home,,,,,,,,${trip.endLatitude?.toFixed(6) || ""},${trip.endLongitude?.toFixed(6) || ""},${endKm},${endAllowance}\n`;
+        srNo++;
+      }
+    }
+
+    return csv;
+  };
+
   const handleExportCSV = useCallback(async () => {
     if (Platform.OS === "web") {
       Alert.alert(
         "Export Not Available",
-        "CSV export is only available on mobile devices via Expo Go."
+        "Excel export is only available on mobile devices via Expo Go."
       );
       return;
     }
 
+    if (reportType === "dateRange") {
+      const start = parseDateDDMMYYYY(startDate);
+      const end = parseDateDDMMYYYY(endDate);
+      
+      if (!start || !end) {
+        Alert.alert("Invalid Date", "Please enter valid dates in DD-MM-YYYY format.");
+        return;
+      }
+
+      if (start > end) {
+        Alert.alert("Invalid Date Range", "Start date must be before end date.");
+        return;
+      }
+    }
+
     setIsExporting(true);
     try {
-      const { start, end } = getDateRangeBounds();
-      const csvContent = await exportTripsToCSV(start, end);
-
-      const dateStr = new Date().toISOString().split("T")[0];
-      const rangeLabel = dateRange === "all" ? "all-time" : dateRange;
-      const fileName = `trip-report-${rangeLabel}-${dateStr}.csv`;
+      const csvContent = await generateExcelContent();
+      
+      const dateStr = reportType === "current" 
+        ? formatDateDDMMYYYY(Date.now()).replace(/-/g, "")
+        : `${startDate.replace(/-/g, "")}_to_${endDate.replace(/-/g, "")}`;
+      
+      const fileName = `trip-report-${dateStr}.csv`;
       const filePath = `${FileSystem.documentDirectory}${fileName}`;
 
       await FileSystem.writeAsStringAsync(filePath, csvContent, {
@@ -135,22 +251,47 @@ export default function ReportsScreen() {
     } finally {
       setIsExporting(false);
     }
-  }, [dateRange, getDateRangeBounds]);
+  }, [reportType, startDate, endDate, settings, user]);
 
-  const DateRangeButton = ({
+  const openDateModal = () => {
+    setTempStartDate(startDate);
+    setTempEndDate(endDate);
+    setShowDateModal(true);
+  };
+
+  const applyDateRange = () => {
+    const start = parseDateDDMMYYYY(tempStartDate);
+    const end = parseDateDDMMYYYY(tempEndDate);
+    
+    if (!start || !end) {
+      Alert.alert("Invalid Date", "Please enter valid dates in DD-MM-YYYY format.");
+      return;
+    }
+
+    if (start > end) {
+      Alert.alert("Invalid Date Range", "Start date must be before end date.");
+      return;
+    }
+
+    setStartDate(tempStartDate);
+    setEndDate(tempEndDate);
+    setShowDateModal(false);
+  };
+
+  const ReportTypeButton = ({
     value,
     label,
   }: {
-    value: DateRange;
+    value: ReportType;
     label: string;
   }) => (
     <Pressable
-      onPress={() => setDateRange(value)}
+      onPress={() => setReportType(value)}
       style={[
         styles.rangeButton,
         {
           backgroundColor:
-            dateRange === value
+            reportType === value
               ? AppColors.primary
               : theme.backgroundSecondary,
         },
@@ -160,7 +301,7 @@ export default function ReportsScreen() {
         type="small"
         style={[
           styles.rangeButtonText,
-          { color: dateRange === value ? "#FFFFFF" : theme.text },
+          { color: reportType === value ? "#FFFFFF" : theme.text },
         ]}
       >
         {label}
@@ -183,10 +324,43 @@ export default function ReportsScreen() {
   return (
     <ScreenScrollView showsVerticalScrollIndicator={false}>
       <View style={styles.rangeContainer}>
-        <DateRangeButton value="week" label="Week" />
-        <DateRangeButton value="month" label="Month" />
-        <DateRangeButton value="all" label="All Time" />
+        <ReportTypeButton value="current" label="Current Date" />
+        <ReportTypeButton value="dateRange" label="Date Range" />
       </View>
+
+      {reportType === "dateRange" ? (
+        <Pressable
+          onPress={openDateModal}
+          style={[
+            styles.dateRangeDisplay,
+            {
+              backgroundColor: theme.backgroundDefault,
+              borderColor: theme.backgroundSecondary,
+            },
+          ]}
+        >
+          <Feather name="calendar" size={20} color={theme.textSecondary} />
+          <ThemedText type="body">
+            {startDate} to {endDate}
+          </ThemedText>
+          <Feather name="edit-2" size={16} color={theme.textSecondary} />
+        </Pressable>
+      ) : (
+        <View
+          style={[
+            styles.dateRangeDisplay,
+            {
+              backgroundColor: theme.backgroundDefault,
+              borderColor: theme.backgroundSecondary,
+            },
+          ]}
+        >
+          <Feather name="calendar" size={20} color={theme.textSecondary} />
+          <ThemedText type="body">
+            Today: {formatDateDDMMYYYY(Date.now())}
+          </ThemedText>
+        </View>
+      )}
 
       <View style={styles.statsGrid}>
         <View style={styles.statsRow}>
@@ -199,13 +373,8 @@ export default function ReportsScreen() {
           <View style={styles.statSpacer} />
           <StatCard
             title="Total Allowance"
-            value={formatAllowance(
-              stats.totalDistance,
-              settings.useKilometers
-                ? settings.allowanceRate
-                : settings.allowanceRatePerMile || 0.8
-            )}
-            icon="dollar-sign"
+            value={`Rs ${stats.totalAllowance.toFixed(2)}`}
+            icon="credit-card"
             iconColor={AppColors.accent}
           />
         </View>
@@ -218,10 +387,10 @@ export default function ReportsScreen() {
           />
           <View style={styles.statSpacer} />
           <StatCard
-            title="Avg Distance"
-            value={formatDistance(stats.avgDistance, settings.useKilometers)}
-            icon="trending-up"
-            iconColor={AppColors.secondary}
+            title="Site Visits"
+            value={filteredSiteVisits.length.toString()}
+            icon="map-pin"
+            iconColor={AppColors.error}
           />
         </View>
         <View style={styles.statsRow}>
@@ -233,10 +402,10 @@ export default function ReportsScreen() {
           />
           <View style={styles.statSpacer} />
           <StatCard
-            title="Site Visits"
-            value={filteredTrips.reduce((sum, t) => sum + t.siteVisits.length, 0).toString()}
-            icon="map-pin"
-            iconColor={AppColors.error}
+            title="Avg Distance"
+            value={formatDistance(stats.avgDistance, settings.useKilometers)}
+            icon="trending-up"
+            iconColor={AppColors.secondary}
           />
         </View>
       </View>
@@ -303,7 +472,7 @@ export default function ReportsScreen() {
           color="#FFFFFF"
         />
         <ThemedText style={styles.exportButtonText}>
-          {isExporting ? "Exporting..." : "Export to CSV"}
+          {isExporting ? "Exporting..." : "Download Excel Report"}
         </ThemedText>
       </Pressable>
 
@@ -319,10 +488,99 @@ export default function ReportsScreen() {
             type="small"
             style={[styles.noDataText, { color: theme.textSecondary }]}
           >
-            No trips found in this date range.
+            No trips found for the selected date range.
           </ThemedText>
         </View>
       ) : null}
+
+      <Modal
+        visible={showDateModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDateModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowDateModal(false)}
+        >
+          <Pressable
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <ThemedText type="h4" style={styles.modalTitle}>
+              Select Date Range
+            </ThemedText>
+
+            <View style={styles.modalInputContainer}>
+              <ThemedText type="caption" style={styles.modalInputLabel}>
+                Start Date (DD-MM-YYYY)
+              </ThemedText>
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: theme.backgroundSecondary,
+                    color: theme.text,
+                    borderColor: theme.backgroundTertiary,
+                  },
+                ]}
+                value={tempStartDate}
+                onChangeText={setTempStartDate}
+                placeholder="DD-MM-YYYY"
+                placeholderTextColor={theme.textSecondary}
+                keyboardType="numbers-and-punctuation"
+              />
+            </View>
+
+            <View style={styles.modalInputContainer}>
+              <ThemedText type="caption" style={styles.modalInputLabel}>
+                End Date (DD-MM-YYYY)
+              </ThemedText>
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: theme.backgroundSecondary,
+                    color: theme.text,
+                    borderColor: theme.backgroundTertiary,
+                  },
+                ]}
+                value={tempEndDate}
+                onChangeText={setTempEndDate}
+                placeholder="DD-MM-YYYY"
+                placeholderTextColor={theme.textSecondary}
+                keyboardType="numbers-and-punctuation"
+              />
+            </View>
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                onPress={() => setShowDateModal(false)}
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: theme.backgroundSecondary },
+                ]}
+              >
+                <ThemedText type="body">Cancel</ThemedText>
+              </Pressable>
+              <Pressable
+                onPress={applyDateRange}
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: AppColors.primary },
+                ]}
+              >
+                <ThemedText type="body" style={{ color: "#FFFFFF" }}>
+                  Apply
+                </ThemedText>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScreenScrollView>
   );
 }
@@ -330,7 +588,7 @@ export default function ReportsScreen() {
 const styles = StyleSheet.create({
   rangeContainer: {
     flexDirection: "row",
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
     gap: Spacing.sm,
   },
   rangeButton: {
@@ -341,6 +599,15 @@ const styles = StyleSheet.create({
   },
   rangeButtonText: {
     fontWeight: "600",
+  },
+  dateRangeDisplay: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    marginBottom: Spacing.lg,
   },
   statsGrid: {
     gap: Spacing.md,
@@ -410,5 +677,48 @@ const styles = StyleSheet.create({
   },
   noDataText: {
     textAlign: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Spacing.lg,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 400,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.md,
+  },
+  modalTitle: {
+    marginBottom: Spacing.lg,
+    textAlign: "center",
+  },
+  modalInputContainer: {
+    marginBottom: Spacing.md,
+  },
+  modalInputLabel: {
+    marginBottom: Spacing.xs,
+    opacity: 0.7,
+  },
+  modalInput: {
+    height: Spacing.inputHeight,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.md,
+    fontSize: 16,
+    borderWidth: 1,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  modalButton: {
+    flex: 1,
+    height: Spacing.buttonHeight,
+    borderRadius: BorderRadius.sm,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

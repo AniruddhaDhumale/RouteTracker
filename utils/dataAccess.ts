@@ -215,6 +215,7 @@ export async function getUserSettings(): Promise<ExtendedUserSettings> {
   const settings = await getUserSettingsAsync();
   return {
     ...settings,
+    allowanceRate: settings.allowanceRate || 3.5,
     allowanceRatePerMile: 0.8,
     minDistanceForAllowance: 0,
     maxDailyAllowance: 0,
@@ -386,7 +387,7 @@ export function formatAllowanceAdvanced(
   settings: ExtendedUserSettings
 ): string {
   const amount = calculateAllowance(distanceKm, settings);
-  return `$${amount.toFixed(2)}`;
+  return `Rs ${amount.toFixed(2)}`;
 }
 
 export { ExtendedUserSettings };

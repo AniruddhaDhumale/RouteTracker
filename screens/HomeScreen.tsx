@@ -216,8 +216,8 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           <View style={styles.statSpacer} />
           <StatCard
             title="Allowance"
-            value={`$${todaysAllowance.toFixed(2)}`}
-            icon="dollar-sign"
+            value={`Rs ${todaysAllowance.toFixed(2)}`}
+            icon="credit-card"
             iconColor={AppColors.accent}
           />
         </View>
