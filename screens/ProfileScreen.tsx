@@ -190,127 +190,24 @@ export default function ProfileScreen() {
           onSwitchChange={(value) => updateSetting("useKilometers", value)}
         />
 
-        <View style={styles.inputContainer}>
-          <ThemedText type="caption" style={styles.inputLabel}>
-            Allowance Rate (Rs per {localSettings.useKilometers ? "km" : "mile"})
-          </ThemedText>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: theme.backgroundSecondary,
-                color: theme.text,
-                borderColor: theme.backgroundTertiary,
-              },
-            ]}
-            value={localSettings.allowanceRate.toString()}
-            onChangeText={(text) => {
-              const num = parseFloat(text) || 0;
-              updateSetting("allowanceRate", num);
-            }}
-            keyboardType="decimal-pad"
-            placeholder="3.5"
-            placeholderTextColor={theme.textSecondary}
-          />
-          <ThemedText type="caption" style={[styles.helperText, { color: theme.textSecondary }]}>
-            Default rate is Rs 3.5 per kilometer.
-          </ThemedText>
+        <View style={styles.infoRow}>
+          <View style={styles.infoItem}>
+            <ThemedText type="caption" style={[styles.infoLabel, { color: theme.textSecondary }]}>
+              Allowance Rate
+            </ThemedText>
+            <ThemedText type="body">Rs 3.5 per kilometer (Fixed)</ThemedText>
+          </View>
         </View>
 
-        <SettingsItem
-          icon="radio"
-          title="GPS Update Frequency"
-          subtitle="How often location is recorded"
-          value={getCurrentFrequencyLabel()}
-          onPress={handleGPSFrequencyChange}
-          showChevron
-        />
-      </View>
-
-      <View
-        style={[
-          styles.section,
-          {
-            backgroundColor: theme.backgroundDefault,
-            borderColor: theme.backgroundSecondary,
-          },
-        ]}
-      >
-        <ThemedText type="small" style={styles.sectionTitle}>
-          Advanced Allowance Settings
-        </ThemedText>
-
-        <View style={styles.inputContainer}>
-          <ThemedText type="caption" style={styles.inputLabel}>
-            Minimum Distance for Allowance ({localSettings.useKilometers ? "km" : "miles"})
-          </ThemedText>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: theme.backgroundSecondary,
-                color: theme.text,
-                borderColor: theme.backgroundTertiary,
-              },
-            ]}
-            value={(localSettings.minDistanceForAllowance ?? 0).toString()}
-            onChangeText={(text) => {
-              const num = parseFloat(text) || 0;
-              updateSetting("minDistanceForAllowance", num);
-            }}
-            keyboardType="decimal-pad"
-            placeholder="0"
-            placeholderTextColor={theme.textSecondary}
-          />
-          <ThemedText type="caption" style={[styles.helperText, { color: theme.textSecondary }]}>
-            No allowance paid below this distance. Set to 0 to disable.
-          </ThemedText>
-        </View>
-
-        <View style={styles.inputContainer}>
-          <ThemedText type="caption" style={styles.inputLabel}>
-            Maximum Daily Allowance (Rs)
-          </ThemedText>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: theme.backgroundSecondary,
-                color: theme.text,
-                borderColor: theme.backgroundTertiary,
-              },
-            ]}
-            value={(localSettings.maxDailyAllowance ?? 0).toString()}
-            onChangeText={(text) => {
-              const num = parseFloat(text) || 0;
-              updateSetting("maxDailyAllowance", num);
-            }}
-            keyboardType="decimal-pad"
-            placeholder="0"
-            placeholderTextColor={theme.textSecondary}
-          />
-          <ThemedText type="caption" style={[styles.helperText, { color: theme.textSecondary }]}>
-            Cap on daily travel allowance. Set to 0 for no limit.
-          </ThemedText>
+        <View style={styles.infoRow}>
+          <View style={styles.infoItem}>
+            <ThemedText type="caption" style={[styles.infoLabel, { color: theme.textSecondary }]}>
+              GPS Update Frequency
+            </ThemedText>
+            <ThemedText type="body">Medium (15 seconds) (Fixed)</ThemedText>
+          </View>
         </View>
       </View>
-
-      {hasChanges ? (
-        <Pressable
-          onPress={handleSave}
-          style={({ pressed }) => [
-            styles.saveButton,
-            { backgroundColor: AppColors.primary, opacity: pressed ? 0.8 : 1 },
-          ]}
-        >
-          <ThemedText
-            type="body"
-            style={[styles.saveButtonText, { color: "#FFFFFF" }]}
-          >
-            Save Changes
-          </ThemedText>
-        </Pressable>
-      ) : null}
 
       <Pressable
         onPress={handleLogout}

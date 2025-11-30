@@ -228,7 +228,7 @@ export function calculateTotalDistance(points: GPSPoint[]): number {
     const prev = sortedPoints[i - 1];
     const curr = sortedPoints[i];
     
-    // Skip invalid coordinates (0,0 or very close points within 1 meter)
+    // Skip invalid coordinates (0,0)
     if ((prev.latitude === 0 && prev.longitude === 0) || 
         (curr.latitude === 0 && curr.longitude === 0)) {
       continue;
@@ -241,8 +241,9 @@ export function calculateTotalDistance(points: GPSPoint[]): number {
       curr.longitude
     );
     
-    // Skip unrealistic distances (noise from poor GPS accuracy)
-    if (distance < 50) { // Skip jumps less than 50km (GPS noise)
+    // Skip only huge unrealistic jumps (>50km) which indicate GPS errors
+    // but include all reasonable movements including very small ones (1-2 meters)
+    if (distance < 50) {
       totalDistance += distance;
     }
   }

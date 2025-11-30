@@ -34,8 +34,8 @@ export default function RegisterScreen({ navigation }: RegisterScreenProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    return emailRegex.test(email.toLowerCase());
   };
 
   const handleRegister = async () => {
