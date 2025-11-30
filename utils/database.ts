@@ -30,78 +30,102 @@ export async function initializeDatabase(): Promise<void> {
     return;
   }
 
-  const database = await getDatabase();
+  try {
+    const database = await getDatabase();
 
-  await database.execAsync(`
-    CREATE TABLE IF NOT EXISTS trips (
-      id TEXT PRIMARY KEY,
-      startTime INTEGER NOT NULL,
-      endTime INTEGER,
-      startLatitude REAL NOT NULL,
-      startLongitude REAL NOT NULL,
-      endLatitude REAL,
-      endLongitude REAL,
-      totalDistance REAL NOT NULL DEFAULT 0,
-      isActive INTEGER NOT NULL DEFAULT 0
-    );
+    // Create tables one at a time for better compatibility
+    await database.runAsync(`
+      CREATE TABLE IF NOT EXISTS trips (
+        id TEXT PRIMARY KEY,
+        startTime INTEGER NOT NULL,
+        endTime INTEGER,
+        startLatitude REAL NOT NULL,
+        startLongitude REAL NOT NULL,
+        endLatitude REAL,
+        endLongitude REAL,
+        totalDistance REAL NOT NULL DEFAULT 0,
+        isActive INTEGER NOT NULL DEFAULT 0
+      )
+    `);
 
-    CREATE TABLE IF NOT EXISTS gps_points (
-      id TEXT PRIMARY KEY,
-      tripId TEXT NOT NULL,
-      latitude REAL NOT NULL,
-      longitude REAL NOT NULL,
-      timestamp INTEGER NOT NULL,
-      accuracy REAL,
-      FOREIGN KEY (tripId) REFERENCES trips(id) ON DELETE CASCADE
-    );
+    await database.runAsync(`
+      CREATE TABLE IF NOT EXISTS gps_points (
+        id TEXT PRIMARY KEY,
+        tripId TEXT NOT NULL,
+        latitude REAL NOT NULL,
+        longitude REAL NOT NULL,
+        timestamp INTEGER NOT NULL,
+        accuracy REAL,
+        FOREIGN KEY (tripId) REFERENCES trips(id) ON DELETE CASCADE
+      )
+    `);
 
-    CREATE TABLE IF NOT EXISTS site_visits (
-      id TEXT PRIMARY KEY,
-      tripId TEXT NOT NULL,
-      siteName TEXT NOT NULL,
-      notes TEXT,
-      photoUri TEXT,
-      arrivalTime INTEGER NOT NULL,
-      arrivalLatitude REAL NOT NULL,
-      arrivalLongitude REAL NOT NULL,
-      departureTime INTEGER,
-      departureLatitude REAL,
-      departureLongitude REAL,
-      schemeName TEXT,
-      schemeNumber TEXT,
-      esrDetails TEXT,
-      village TEXT,
-      issueReported TEXT,
-      resolution TEXT,
-      currentStatus TEXT,
-      FOREIGN KEY (tripId) REFERENCES trips(id) ON DELETE CASCADE
-    );
+    await database.runAsync(`
+      CREATE TABLE IF NOT EXISTS site_visits (
+        id TEXT PRIMARY KEY,
+        tripId TEXT NOT NULL,
+        siteName TEXT NOT NULL,
+        notes TEXT,
+        photoUri TEXT,
+        arrivalTime INTEGER NOT NULL,
+        arrivalLatitude REAL NOT NULL,
+        arrivalLongitude REAL NOT NULL,
+        departureTime INTEGER,
+        departureLatitude REAL,
+        departureLongitude REAL,
+        schemeName TEXT,
+        schemeNumber TEXT,
+        esrDetails TEXT,
+        village TEXT,
+        issueReported TEXT,
+        resolution TEXT,
+        currentStatus TEXT,
+        FOREIGN KEY (tripId) REFERENCES trips(id) ON DELETE CASCADE
+      )
+    `);
 
-    CREATE TABLE IF NOT EXISTS user_settings (
-      id INTEGER PRIMARY KEY DEFAULT 1,
-      workerName TEXT DEFAULT '',
-      workerId TEXT DEFAULT '',
-      useKilometers INTEGER DEFAULT 1,
-      allowanceRate REAL DEFAULT 3.5,
-      gpsUpdateFrequency TEXT DEFAULT 'medium',
-      allowanceRatePerMile REAL DEFAULT 0.8,
-      minDistanceForAllowance REAL DEFAULT 0,
-      maxDailyAllowance REAL DEFAULT 0
-    );
+    await database.runAsync(`
+      CREATE TABLE IF NOT EXISTS user_settings (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        workerName TEXT DEFAULT '',
+        workerId TEXT DEFAULT '',
+        useKilometers INTEGER DEFAULT 1,
+        allowanceRate REAL DEFAULT 3.5,
+        gpsUpdateFrequency TEXT DEFAULT 'medium',
+        allowanceRatePerMile REAL DEFAULT 0.8,
+        minDistanceForAllowance REAL DEFAULT 0,
+        maxDailyAllowance REAL DEFAULT 0
+      )
+    `);
 
-    CREATE INDEX IF NOT EXISTS idx_gps_points_tripId ON gps_points(tripId);
-    CREATE INDEX IF NOT EXISTS idx_site_visits_tripId ON site_visits(tripId);
-    CREATE INDEX IF NOT EXISTS idx_trips_startTime ON trips(startTime);
-    CREATE INDEX IF NOT EXISTS idx_trips_isActive ON trips(isActive);
-  `);
-
-  const settingsResult = await database.getFirstAsync<{ count: number }>(
-    "SELECT COUNT(*) as count FROM user_settings"
-  );
-  if (!settingsResult || settingsResult.count === 0) {
     await database.runAsync(
-      "INSERT INTO user_settings (id) VALUES (1)"
+      "CREATE INDEX IF NOT EXISTS idx_gps_points_tripId ON gps_points(tripId)"
     );
+    await database.runAsync(
+      "CREATE INDEX IF NOT EXISTS idx_site_visits_tripId ON site_visits(tripId)"
+    );
+    await database.runAsync(
+      "CREATE INDEX IF NOT EXISTS idx_trips_startTime ON trips(startTime)"
+    );
+    await database.runAsync(
+      "CREATE INDEX IF NOT EXISTS idx_trips_isActive ON trips(isActive)"
+    );
+
+    // Initialize default settings
+    const settingsResult = await database.getFirstAsync<{ count: number }>(
+      "SELECT COUNT(*) as count FROM user_settings"
+    );
+    if (!settingsResult || settingsResult.count === 0) {
+      await database.runAsync(
+        "INSERT INTO user_settings (id) VALUES (1)"
+      );
+    }
+
+    console.log("SQLite database initialized successfully");
+  } catch (error) {
+    console.error("Failed to initialize SQLite database:", error);
+    console.log("Falling back to AsyncStorage");
+    db = null;
   }
 }
 

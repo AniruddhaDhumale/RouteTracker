@@ -227,12 +227,24 @@ export function calculateTotalDistance(points: GPSPoint[]): number {
   for (let i = 1; i < sortedPoints.length; i++) {
     const prev = sortedPoints[i - 1];
     const curr = sortedPoints[i];
-    totalDistance += calculateDistance(
+    
+    // Skip invalid coordinates (0,0 or very close points within 1 meter)
+    if ((prev.latitude === 0 && prev.longitude === 0) || 
+        (curr.latitude === 0 && curr.longitude === 0)) {
+      continue;
+    }
+    
+    const distance = calculateDistance(
       prev.latitude,
       prev.longitude,
       curr.latitude,
       curr.longitude
     );
+    
+    // Skip unrealistic distances (noise from poor GPS accuracy)
+    if (distance < 50) { // Skip jumps less than 50km (GPS noise)
+      totalDistance += distance;
+    }
   }
   
   return totalDistance;
