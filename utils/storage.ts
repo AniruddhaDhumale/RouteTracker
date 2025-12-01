@@ -226,15 +226,12 @@ export function calculateTotalDistance(points: GPSPoint[]): number {
   const sortedPoints = [...points].sort((a, b) => a.timestamp - b.timestamp);
   let totalDistance = 0;
   
-  // Thresholds
-  const MAX_DISTANCE_THRESHOLD = 50; // 50km - GPS jump filter
-  const MAX_SPEED_KMH = 180;
-  const MAX_ACCURACY_METERS = 100;
-  
-  // Movement detection
-  const CONFIDENT_MOVEMENT_KM = 0.025; // 25m single segment = clearly real
-  const HIGH_CONFIDENCE_THRESHOLD = 0.6;
-  const LOW_CONFIDENCE_THRESHOLD = 0.2;
+  // Thresholds for filtering GPS noise vs real movement
+  const MAX_JUMP_KM = 10; // Filter GPS teleportation
+  const MAX_SPEED_KMH = 200; // Max realistic speed
+  const MAX_ACCURACY_METERS = 100; // Skip poor accuracy points
+  const MIN_MOVEMENT_METERS = 10; // Minimum distance to count (filters GPS drift)
+  const MOTION_CONFIDENCE_THRESHOLD = 0.4; // Required confidence to count as moving
   
   for (let i = 1; i < sortedPoints.length; i++) {
     const prev = sortedPoints[i - 1];
@@ -246,70 +243,64 @@ export function calculateTotalDistance(points: GPSPoint[]): number {
       continue;
     }
     
-    // Skip very poor accuracy
-    if ((prev.accuracy && prev.accuracy > MAX_ACCURACY_METERS) || 
-        (curr.accuracy && curr.accuracy > MAX_ACCURACY_METERS)) {
+    // STRICT STATIONARY CHECK: If BOTH points are marked stationary, skip entirely
+    // This is the key check - if you're not moving, don't count any distance
+    if (curr.isStationary === true && prev.isStationary === true) {
       continue;
     }
     
-    const timeDiffMs = curr.timestamp - prev.timestamp;
-    const timeDiffHours = timeDiffMs / (1000 * 60 * 60);
+    // Check motion confidence - at least one point must show movement confidence
+    const currConfidence = curr.motionConfidence ?? 0;
+    const prevConfidence = prev.motionConfidence ?? 0;
+    const maxConfidence = Math.max(currConfidence, prevConfidence);
     
-    const distance = calculateDistance(
+    // If motion confidence is very low on both points, skip (likely stationary)
+    if (maxConfidence < MOTION_CONFIDENCE_THRESHOLD) {
+      continue;
+    }
+    
+    // Skip very poor accuracy points
+    const prevAccuracy = prev.accuracy || 15;
+    const currAccuracy = curr.accuracy || 15;
+    if (prevAccuracy > MAX_ACCURACY_METERS || currAccuracy > MAX_ACCURACY_METERS) {
+      continue;
+    }
+    
+    // Calculate segment distance using Haversine
+    const segmentDistance = calculateDistance(
       prev.latitude, prev.longitude,
       curr.latitude, curr.longitude
     );
+    const segmentDistanceMeters = segmentDistance * 1000;
     
-    // Skip unrealistic jumps
-    if (distance >= MAX_DISTANCE_THRESHOLD) {
+    // Skip if movement is too small (GPS drift when stationary)
+    // This filters out the typical 3-10m GPS jitter
+    if (segmentDistanceMeters < MIN_MOVEMENT_METERS) {
       continue;
     }
     
-    // Skip unrealistic speeds
-    const speedKmh = timeDiffHours > 0 ? distance / timeDiffHours : 0;
-    if (speedKmh > MAX_SPEED_KMH) {
+    // Skip unrealistic GPS jumps
+    if (segmentDistance >= MAX_JUMP_KM) {
       continue;
     }
     
-    // Get accuracy-based limits
-    const avgAccuracy = ((prev.accuracy || 15) + (curr.accuracy || 15)) / 2;
-    const accuracyKm = avgAccuracy / 1000;
-    
-    // Get motion confidence (use 0 as default if not available - assume stationary)
-    const currConfidence = curr.motionConfidence ?? 0;
-    const prevConfidence = prev.motionConfidence ?? 0;
-    const minConfidence = Math.min(currConfidence, prevConfidence);
-    
-    // If both points marked as stationary with low confidence, skip
-    if (curr.isStationary && prev.isStationary && minConfidence < LOW_CONFIDENCE_THRESHOLD) {
-      continue;
-    }
-    
-    // Large movements count only if BOTH endpoints have high motion confidence
-    if (distance >= CONFIDENT_MOVEMENT_KM) {
-      if (minConfidence >= HIGH_CONFIDENCE_THRESHOLD) {
-        totalDistance += distance;
+    // Check for unrealistic speed
+    const timeDiffMs = curr.timestamp - prev.timestamp;
+    const timeDiffHours = timeDiffMs / (1000 * 60 * 60);
+    if (timeDiffHours > 0) {
+      const speedKmh = segmentDistance / timeDiffHours;
+      if (speedKmh > MAX_SPEED_KMH) {
+        continue;
       }
-      continue;
     }
     
-    // Use motion confidence to scale contribution
-    // High confidence = count the distance
-    // Low confidence = skip (likely drift)
-    
-    if (minConfidence < LOW_CONFIDENCE_THRESHOLD) {
-      continue;
-    }
-    
-    let contributionFactor = 1.0;
-    
-    if (minConfidence >= HIGH_CONFIDENCE_THRESHOLD) {
-      contributionFactor = 1.0;
+    // Movement passed all checks - count it
+    // Scale by motion confidence for borderline cases
+    if (maxConfidence >= 0.7) {
+      totalDistance += segmentDistance; // High confidence - full distance
     } else {
-      contributionFactor = (minConfidence - LOW_CONFIDENCE_THRESHOLD) / (HIGH_CONFIDENCE_THRESHOLD - LOW_CONFIDENCE_THRESHOLD);
+      totalDistance += segmentDistance * maxConfidence; // Lower confidence - scaled
     }
-    
-    totalDistance += distance * contributionFactor;
   }
   
   return totalDistance;

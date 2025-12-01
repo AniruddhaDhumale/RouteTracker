@@ -149,15 +149,15 @@ export function useTrip() {
       }
 
       const intervalMap = {
-        low: 30000,
-        medium: 15000,
-        high: 5000,
+        low: 20000,     // 20 seconds - battery saver
+        medium: 10000,  // 10 seconds - balanced
+        high: 3000,     // 3 seconds - fitness app accuracy
       };
 
       const distanceMap = {
-        low: 50,
-        medium: 20,
-        high: 10,
+        low: 30,    // 30 meters
+        medium: 10, // 10 meters
+        high: 5,    // 5 meters - captures turns and curves accurately
       };
 
       const interval = intervalMap[state.settings.gpsUpdateFrequency];
