@@ -224,6 +224,12 @@ export function calculateTotalDistance(points: GPSPoint[]): number {
   const sortedPoints = [...points].sort((a, b) => a.timestamp - b.timestamp);
   let totalDistance = 0;
   
+  // Minimum distance threshold in km (15 meters = 0.015 km) to filter GPS drift/noise
+  // GPS typically has 5-15 meter accuracy, so movements below this are likely just drift
+  const MIN_DISTANCE_THRESHOLD = 0.015;
+  // Maximum realistic distance between points (50km) - larger jumps indicate GPS errors
+  const MAX_DISTANCE_THRESHOLD = 50;
+  
   for (let i = 1; i < sortedPoints.length; i++) {
     const prev = sortedPoints[i - 1];
     const curr = sortedPoints[i];
@@ -234,6 +240,12 @@ export function calculateTotalDistance(points: GPSPoint[]): number {
       continue;
     }
     
+    // Skip points with poor accuracy (> 30 meters)
+    if ((prev.accuracy && prev.accuracy > 30) || 
+        (curr.accuracy && curr.accuracy > 30)) {
+      continue;
+    }
+    
     const distance = calculateDistance(
       prev.latitude,
       prev.longitude,
@@ -241,9 +253,10 @@ export function calculateTotalDistance(points: GPSPoint[]): number {
       curr.longitude
     );
     
-    // Skip only huge unrealistic jumps (>50km) which indicate GPS errors
-    // but include all reasonable movements including very small ones (1-2 meters)
-    if (distance < 50) {
+    // Only count movements that are:
+    // 1. Greater than minimum threshold (filters out GPS drift when stationary)
+    // 2. Less than maximum threshold (filters out GPS errors/jumps)
+    if (distance >= MIN_DISTANCE_THRESHOLD && distance < MAX_DISTANCE_THRESHOLD) {
       totalDistance += distance;
     }
   }

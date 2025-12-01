@@ -40,37 +40,61 @@ import {
 
 const isNative = Platform.OS !== "web";
 let isDBInitialized = false;
+let initializationPromise: Promise<boolean> | null = null;
 
-export async function initializeDataLayer(): Promise<void> {
-  if (isNative && !isDBInitialized) {
-    try {
-      await initializeDatabase();
-      isDBInitialized = true;
-      console.log("SQLite database initialized successfully");
-    } catch (error) {
-      console.error("Failed to initialize SQLite database:", error);
-    }
+export async function initializeDataLayer(): Promise<boolean> {
+  if (!isNative) return false;
+  
+  if (isDBInitialized) return true;
+  
+  if (!initializationPromise) {
+    initializationPromise = (async () => {
+      try {
+        await initializeDatabase();
+        isDBInitialized = true;
+        return true;
+      } catch (error) {
+        console.error("Failed to initialize SQLite database:", error);
+        isDBInitialized = false;
+        initializationPromise = null;
+        return false;
+      }
+    })();
   }
+  
+  return await initializationPromise;
+}
+
+function resetDBState(): void {
+  isDBInitialized = false;
+  initializationPromise = null;
+}
+
+async function ensureDBInitialized(): Promise<boolean> {
+  if (!isNative) return false;
+  return await initializeDataLayer();
 }
 
 export async function getTrips(): Promise<Trip[]> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       return await getTripsFromDB();
     } catch (error) {
       console.error("SQLite getTrips failed, falling back:", error);
+      resetDBState();
     }
   }
   return getTripsAsync();
 }
 
 export async function saveTrip(trip: Trip): Promise<void> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       await saveTripToDB(trip);
       return;
     } catch (error) {
       console.error("SQLite saveTrip failed, falling back:", error);
+      resetDBState();
     }
   }
   const trips = await getTripsAsync();
@@ -84,7 +108,7 @@ export async function saveTrip(trip: Trip): Promise<void> {
 }
 
 export async function saveTrips(trips: Trip[]): Promise<void> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       for (const trip of trips) {
         await saveTripToDB(trip);
@@ -92,18 +116,20 @@ export async function saveTrips(trips: Trip[]): Promise<void> {
       return;
     } catch (error) {
       console.error("SQLite saveTrips failed, falling back:", error);
+      resetDBState();
     }
   }
   await saveTripsAsync(trips);
 }
 
 export async function deleteTrip(tripId: string): Promise<void> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       await deleteTripFromDB(tripId);
       return;
     } catch (error) {
       console.error("SQLite deleteTrip failed, falling back:", error);
+      resetDBState();
     }
   }
   const trips = await getTripsAsync();
@@ -111,18 +137,19 @@ export async function deleteTrip(tripId: string): Promise<void> {
 }
 
 export async function getActiveTrip(): Promise<Trip | null> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       return await getActiveTripFromDB();
     } catch (error) {
       console.error("SQLite getActiveTrip failed, falling back:", error);
+      resetDBState();
     }
   }
   return getActiveTripAsync();
 }
 
 export async function saveActiveTrip(trip: Trip | null): Promise<void> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       if (trip) {
         await saveTripToDB(trip);
@@ -130,86 +157,94 @@ export async function saveActiveTrip(trip: Trip | null): Promise<void> {
       return;
     } catch (error) {
       console.error("SQLite saveActiveTrip failed, falling back:", error);
+      resetDBState();
     }
   }
   await saveActiveTripAsync(trip);
 }
 
 export async function getGPSPoints(tripId: string): Promise<GPSPoint[]> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       return await getGPSPointsFromDB(tripId);
     } catch (error) {
       console.error("SQLite getGPSPoints failed, falling back:", error);
+      resetDBState();
     }
   }
   return getGPSPointsAsync(tripId);
 }
 
 export async function saveGPSPoint(point: GPSPoint): Promise<void> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       await saveGPSPointToDB(point);
       return;
     } catch (error) {
       console.error("SQLite saveGPSPoint failed, falling back:", error);
+      resetDBState();
     }
   }
   await saveGPSPointAsync(point);
 }
 
 export async function clearGPSPointsForTrip(tripId: string): Promise<void> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       await clearGPSPointsFromDB(tripId);
       return;
     } catch (error) {
       console.error("SQLite clearGPSPoints failed, falling back:", error);
+      resetDBState();
     }
   }
   await clearGPSPointsAsync(tripId);
 }
 
 export async function getSiteVisits(tripId: string): Promise<SiteVisit[]> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       return await getSiteVisitsFromDB(tripId);
     } catch (error) {
       console.error("SQLite getSiteVisits failed, falling back:", error);
+      resetDBState();
     }
   }
   return getSiteVisitsAsync(tripId);
 }
 
 export async function saveSiteVisit(visit: SiteVisit): Promise<void> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       await saveSiteVisitToDB(visit);
       return;
     } catch (error) {
       console.error("SQLite saveSiteVisit failed, falling back:", error);
+      resetDBState();
     }
   }
   await saveSiteVisitAsync(visit);
 }
 
 export async function getAllSiteVisits(): Promise<SiteVisit[]> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       return await getAllSiteVisitsFromDB();
     } catch (error) {
       console.error("SQLite getAllSiteVisits failed, falling back:", error);
+      resetDBState();
     }
   }
   return getAllSiteVisitsAsync();
 }
 
 export async function getUserSettings(): Promise<ExtendedUserSettings> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       return await getUserSettingsFromDB();
     } catch (error) {
       console.error("SQLite getUserSettings failed, falling back:", error);
+      resetDBState();
     }
   }
   const settings = await getUserSettingsAsync();
@@ -223,12 +258,13 @@ export async function getUserSettings(): Promise<ExtendedUserSettings> {
 }
 
 export async function saveUserSettings(settings: ExtendedUserSettings): Promise<void> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       await saveUserSettingsToDB(settings);
       return;
     } catch (error) {
       console.error("SQLite saveUserSettings failed, falling back:", error);
+      resetDBState();
     }
   }
   await saveUserSettingsAsync(settings);
@@ -238,11 +274,12 @@ export async function getTripsByDateRange(
   startDate: number,
   endDate: number
 ): Promise<Trip[]> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       return await getTripsByDateRangeDB(startDate, endDate);
     } catch (error) {
       console.error("SQLite getTripsByDateRange failed, falling back:", error);
+      resetDBState();
     }
   }
   const trips = await getTripsAsync();
@@ -260,16 +297,17 @@ export async function getTripStats(
   totalDuration: number;
   totalSiteVisits: number;
 }> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       return await getTripStatsDB(startDate, endDate);
     } catch (error) {
       console.error("SQLite getTripStats failed, falling back:", error);
+      resetDBState();
     }
   }
   const trips = await getTripsAsync();
   const filteredTrips = trips.filter(
-    (trip) => trip.startTime >= startDate && trip.startTime <= endDate
+    (trip) => trip.startTime >= startDate && trip.startTime <= endDate && !trip.isActive
   );
   
   const allVisits = await getAllSiteVisitsAsync();
@@ -280,8 +318,8 @@ export async function getTripStats(
     totalTrips: filteredTrips.length,
     totalDistance: filteredTrips.reduce((sum, t) => sum + t.totalDistance, 0),
     totalDuration: filteredTrips.reduce((sum, t) => {
-      const end = t.endTime || Date.now();
-      return sum + (end - t.startTime);
+      if (!t.endTime) return sum;
+      return sum + (t.endTime - t.startTime);
     }, 0),
     totalSiteVisits: filteredVisits.length,
   };
@@ -291,11 +329,12 @@ export async function exportTripsToCSV(
   startDate: number,
   endDate: number
 ): Promise<string> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       return await exportTripsToCSVDB(startDate, endDate);
     } catch (error) {
       console.error("SQLite exportTripsToCSV failed, falling back:", error);
+      resetDBState();
     }
   }
 
@@ -343,11 +382,12 @@ export async function exportTripsToCSV(
 }
 
 export async function getGPSPointCountForTrip(tripId: string): Promise<number> {
-  if (isNative && isDBInitialized) {
+  if (await ensureDBInitialized()) {
     try {
       return await getGPSPointCountDB(tripId);
     } catch (error) {
       console.error("SQLite getGPSPointCount failed, falling back:", error);
+      resetDBState();
     }
   }
   const points = await getGPSPointsAsync(tripId);

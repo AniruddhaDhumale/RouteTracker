@@ -96,6 +96,8 @@ export default function ReportsScreen() {
   }, [allSiteVisits, getDateRangeBounds]);
 
   const stats = useMemo(() => {
+    const completedTrips = filteredTrips.filter(t => t.endTime && !t.isActive);
+    
     const totalDistance = filteredTrips.reduce(
       (sum, t) => sum + t.totalDistance,
       0
@@ -106,12 +108,14 @@ export default function ReportsScreen() {
     const rate = settings.allowanceRate || 3.5;
     const totalAllowance = totalDistance * rate;
 
-    const totalDuration = filteredTrips.reduce((sum, t) => {
-      const end = t.endTime || Date.now();
-      return sum + (end - t.startTime);
+    const totalDuration = completedTrips.reduce((sum, t) => {
+      return sum + (t.endTime! - t.startTime);
     }, 0);
 
-    return { totalDistance, totalTrips, avgDistance, totalAllowance, totalDuration };
+    const completedCount = completedTrips.length;
+    const avgDuration = completedCount > 0 ? totalDuration / completedCount : 0;
+
+    return { totalDistance, totalTrips, avgDistance, totalAllowance, totalDuration, avgDuration };
   }, [filteredTrips, settings]);
 
   const dailyStats = useMemo(() => {
@@ -220,16 +224,33 @@ export default function ReportsScreen() {
     try {
       const csvContent = await generateExcelContent();
       
+      if (!csvContent || csvContent.trim().length === 0) {
+        Alert.alert("No Data", "There is no trip data to export for the selected date range.");
+        return;
+      }
+      
       const dateStr = reportType === "current" 
         ? formatDateDDMMYYYY(Date.now()).replace(/-/g, "")
         : `${startDate.replace(/-/g, "")}_to_${endDate.replace(/-/g, "")}`;
       
       const fileName = `trip-report-${dateStr}.csv`;
+      
+      if (!FileSystem.documentDirectory) {
+        Alert.alert("Export Failed", "Unable to access file system.");
+        return;
+      }
+      
       const filePath = `${FileSystem.documentDirectory}${fileName}`;
 
       await FileSystem.writeAsStringAsync(filePath, csvContent, {
         encoding: FileSystem.EncodingType.UTF8,
       });
+
+      const fileInfo = await FileSystem.getInfoAsync(filePath);
+      if (!fileInfo.exists) {
+        Alert.alert("Export Failed", "Failed to create the export file.");
+        return;
+      }
 
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
@@ -240,14 +261,15 @@ export default function ReportsScreen() {
         });
       } else {
         Alert.alert(
-          "Export Complete",
-          `Report saved to: ${fileName}`,
+          "Sharing Not Available",
+          "File sharing is not available on this device. The report was generated but cannot be shared.",
           [{ text: "OK" }]
         );
       }
     } catch (error) {
       console.error("Export error:", error);
-      Alert.alert("Export Failed", "There was an error exporting your trip data.");
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      Alert.alert("Export Failed", `There was an error exporting your trip data: ${errorMessage}`);
     } finally {
       setIsExporting(false);
     }

@@ -12,15 +12,25 @@ import {
 const DATABASE_NAME = "routetracker.db";
 
 let db: SQLite.SQLiteDatabase | null = null;
+let isInitialized = false;
+let initPromise: Promise<void> | null = null;
 
 export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
-  if (db) return db;
-  
   if (Platform.OS === "web") {
     throw new Error("SQLite is not supported on web platform");
   }
   
-  db = await SQLite.openDatabaseAsync(DATABASE_NAME);
+  if (!isInitialized) {
+    if (!initPromise) {
+      initPromise = initializeDatabase();
+    }
+    await initPromise;
+  }
+  
+  if (!db) {
+    db = await SQLite.openDatabaseAsync(DATABASE_NAME);
+  }
+  
   return db;
 }
 
@@ -30,8 +40,15 @@ export async function initializeDatabase(): Promise<void> {
     return;
   }
 
+  if (isInitialized) {
+    return;
+  }
+
   try {
-    const database = await getDatabase();
+    if (!db) {
+      db = await SQLite.openDatabaseAsync(DATABASE_NAME);
+    }
+    const database = db;
 
     // Create tables one at a time for better compatibility
     await database.runAsync(`
@@ -121,11 +138,14 @@ export async function initializeDatabase(): Promise<void> {
       );
     }
 
+    isInitialized = true;
     console.log("SQLite database initialized successfully");
   } catch (error) {
     console.error("Failed to initialize SQLite database:", error);
     console.log("Falling back to AsyncStorage");
     db = null;
+    isInitialized = false;
+    initPromise = null;
   }
 }
 
