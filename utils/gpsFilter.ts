@@ -22,20 +22,20 @@ class GPSFilter {
   private kalmanState: KalmanState | null = null;
   private pointBuffer: FilteredPoint[] = [];
   private lastValidPoint: FilteredPoint | null = null;
-  private isStationaryLocked = true;
+  private isStationaryLocked = false;
   private lockReleaseTime = 0;
   private dwellCenter: { lat: number; lon: number } | null = null;
   private consecutiveStationaryCount = 0;
   private consecutiveMovingCount = 0;
 
   private readonly BUFFER_SIZE = 15;
-  private readonly STATIONARY_LOCK_RELEASE_METERS = 25;
-  private readonly STATIONARY_LOCK_RELEASE_SECONDS = 20;
-  private readonly DWELL_RADIUS_METERS = 20;
-  private readonly MIN_SPEED_MPS = 0.5;
-  private readonly MIN_ACCURACY_METERS = 30;
-  private readonly MIN_SEGMENT_METERS = 8;
-  private readonly CONSECUTIVE_MOVING_THRESHOLD = 3;
+  private readonly STATIONARY_LOCK_RELEASE_METERS = 10;
+  private readonly STATIONARY_LOCK_RELEASE_SECONDS = 15;
+  private readonly DWELL_RADIUS_METERS = 8;
+  private readonly MIN_SPEED_MPS = 0.3;
+  private readonly MIN_ACCURACY_METERS = 50;
+  private readonly MIN_SEGMENT_METERS = 5;
+  private readonly CONSECUTIVE_MOVING_THRESHOLD = 2;
   private readonly CONSECUTIVE_STATIONARY_THRESHOLD = 5;
   private readonly PROCESS_NOISE = 3;
   private readonly MEASUREMENT_NOISE_BASE = 10;
@@ -44,7 +44,7 @@ class GPSFilter {
     this.kalmanState = null;
     this.pointBuffer = [];
     this.lastValidPoint = null;
-    this.isStationaryLocked = true;
+    this.isStationaryLocked = false;
     this.lockReleaseTime = 0;
     this.dwellCenter = null;
     this.consecutiveStationaryCount = 0;
@@ -318,9 +318,9 @@ export function calculateFilteredDistance(points: GPSPoint[]): number {
   const sortedPoints = [...points].sort((a, b) => a.timestamp - b.timestamp);
   
   let totalDistance = 0;
-  const MIN_SEGMENT_METERS = 15;
-  const MAX_ACCURACY_METERS = 30;
-  const MIN_SPEED_KMH = 1.5;
+  const MIN_SEGMENT_METERS = 5;
+  const MAX_ACCURACY_METERS = 50;
+  const MIN_SPEED_KMH = 0.5;
   const MAX_SPEED_KMH = 200;
   
   let lastValidPoint: GPSPoint | null = null;

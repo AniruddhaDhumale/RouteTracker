@@ -228,9 +228,9 @@ export function calculateTotalDistance(points: GPSPoint[]): number {
   
   const MAX_JUMP_KM = 10;
   const MAX_SPEED_KMH = 200;
-  const MIN_SPEED_KMH = 1.5;
-  const MAX_ACCURACY_METERS = 30;
-  const MIN_MOVEMENT_METERS = 15;
+  const MIN_SPEED_KMH = 0.5;
+  const MAX_ACCURACY_METERS = 50;
+  const MIN_MOVEMENT_METERS = 5;
   
   let lastValidPoint: GPSPoint | null = null;
   let consecutiveMoving = 0;

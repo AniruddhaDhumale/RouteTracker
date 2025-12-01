@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from "react";
 import { StyleSheet, View, Pressable, Alert, Platform, TextInput, Modal } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { documentDirectory, cacheDirectory, writeAsStringAsync, getInfoAsync, EncodingType } from "expo-file-system";
+import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 
 import { ScreenScrollView } from "@/components/ScreenScrollView";
@@ -246,11 +246,11 @@ export default function ReportsScreen() {
         return;
       }
       
-      const fileDir = documentDirectory || cacheDirectory;
+      const fileDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
       if (!fileDir) {
         Alert.alert(
-          "Export Failed", 
-          "Unable to access file system. Please try using the Expo Go app on your mobile device, or access this feature from a web browser.",
+          "File System Unavailable", 
+          "The file system is not accessible. Please try the following:\n\n1. Close and reopen the Expo Go app\n2. Make sure you have granted storage permissions\n3. Try accessing the Reports tab from a web browser instead",
           [{ text: "OK" }]
         );
         return;
@@ -258,13 +258,17 @@ export default function ReportsScreen() {
       
       const filePath = `${fileDir}${fileName}`;
 
-      await writeAsStringAsync(filePath, csvContent, {
-        encoding: EncodingType.UTF8,
+      await FileSystem.writeAsStringAsync(filePath, csvContent, {
+        encoding: FileSystem.EncodingType.UTF8,
       });
 
-      const fileInfo = await getInfoAsync(filePath);
+      const fileInfo = await FileSystem.getInfoAsync(filePath);
       if (!fileInfo.exists) {
-        Alert.alert("Export Failed", "Failed to create the export file.");
+        Alert.alert(
+          "Export Issue", 
+          "The report file could not be created. Please try again or access reports from a web browser.",
+          [{ text: "OK" }]
+        );
         return;
       }
 
@@ -278,7 +282,7 @@ export default function ReportsScreen() {
       } else {
         Alert.alert(
           "Sharing Not Available",
-          "File sharing is not available on this device. The report was generated but cannot be shared.",
+          "File sharing is not available on this device. The report was saved but cannot be shared directly. Please try accessing reports from a web browser instead.",
           [{ text: "OK" }]
         );
       }
