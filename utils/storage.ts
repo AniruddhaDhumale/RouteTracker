@@ -15,6 +15,8 @@ export interface GPSPoint {
   longitude: number;
   timestamp: number;
   accuracy?: number;
+  isStationary?: boolean;
+  motionConfidence?: number;
 }
 
 export interface SiteVisit {
@@ -224,41 +226,90 @@ export function calculateTotalDistance(points: GPSPoint[]): number {
   const sortedPoints = [...points].sort((a, b) => a.timestamp - b.timestamp);
   let totalDistance = 0;
   
-  // Minimum distance threshold in km (15 meters = 0.015 km) to filter GPS drift/noise
-  // GPS typically has 5-15 meter accuracy, so movements below this are likely just drift
-  const MIN_DISTANCE_THRESHOLD = 0.015;
-  // Maximum realistic distance between points (50km) - larger jumps indicate GPS errors
-  const MAX_DISTANCE_THRESHOLD = 50;
+  // Thresholds
+  const MAX_DISTANCE_THRESHOLD = 50; // 50km - GPS jump filter
+  const MAX_SPEED_KMH = 180;
+  const MAX_ACCURACY_METERS = 100;
+  
+  // Movement detection
+  const CONFIDENT_MOVEMENT_KM = 0.025; // 25m single segment = clearly real
+  const HIGH_CONFIDENCE_THRESHOLD = 0.6;
+  const LOW_CONFIDENCE_THRESHOLD = 0.2;
   
   for (let i = 1; i < sortedPoints.length; i++) {
     const prev = sortedPoints[i - 1];
     const curr = sortedPoints[i];
     
-    // Skip invalid coordinates (0,0)
+    // Skip invalid coordinates
     if ((prev.latitude === 0 && prev.longitude === 0) || 
         (curr.latitude === 0 && curr.longitude === 0)) {
       continue;
     }
     
-    // Skip points with poor accuracy (> 30 meters)
-    if ((prev.accuracy && prev.accuracy > 30) || 
-        (curr.accuracy && curr.accuracy > 30)) {
+    // Skip very poor accuracy
+    if ((prev.accuracy && prev.accuracy > MAX_ACCURACY_METERS) || 
+        (curr.accuracy && curr.accuracy > MAX_ACCURACY_METERS)) {
       continue;
     }
     
+    const timeDiffMs = curr.timestamp - prev.timestamp;
+    const timeDiffHours = timeDiffMs / (1000 * 60 * 60);
+    
     const distance = calculateDistance(
-      prev.latitude,
-      prev.longitude,
-      curr.latitude,
-      curr.longitude
+      prev.latitude, prev.longitude,
+      curr.latitude, curr.longitude
     );
     
-    // Only count movements that are:
-    // 1. Greater than minimum threshold (filters out GPS drift when stationary)
-    // 2. Less than maximum threshold (filters out GPS errors/jumps)
-    if (distance >= MIN_DISTANCE_THRESHOLD && distance < MAX_DISTANCE_THRESHOLD) {
-      totalDistance += distance;
+    // Skip unrealistic jumps
+    if (distance >= MAX_DISTANCE_THRESHOLD) {
+      continue;
     }
+    
+    // Skip unrealistic speeds
+    const speedKmh = timeDiffHours > 0 ? distance / timeDiffHours : 0;
+    if (speedKmh > MAX_SPEED_KMH) {
+      continue;
+    }
+    
+    // Get accuracy-based limits
+    const avgAccuracy = ((prev.accuracy || 15) + (curr.accuracy || 15)) / 2;
+    const accuracyKm = avgAccuracy / 1000;
+    
+    // Get motion confidence (use 0 as default if not available - assume stationary)
+    const currConfidence = curr.motionConfidence ?? 0;
+    const prevConfidence = prev.motionConfidence ?? 0;
+    const minConfidence = Math.min(currConfidence, prevConfidence);
+    
+    // If both points marked as stationary with low confidence, skip
+    if (curr.isStationary && prev.isStationary && minConfidence < LOW_CONFIDENCE_THRESHOLD) {
+      continue;
+    }
+    
+    // Large movements count only if BOTH endpoints have high motion confidence
+    if (distance >= CONFIDENT_MOVEMENT_KM) {
+      if (minConfidence >= HIGH_CONFIDENCE_THRESHOLD) {
+        totalDistance += distance;
+      }
+      continue;
+    }
+    
+    // Use motion confidence to scale contribution
+    // High confidence = count the distance
+    // Low confidence = skip (likely drift)
+    
+    if (minConfidence < LOW_CONFIDENCE_THRESHOLD) {
+      continue;
+    }
+    
+    let contributionFactor = 1.0;
+    
+    if (minConfidence >= HIGH_CONFIDENCE_THRESHOLD) {
+      contributionFactor = 1.0;
+    } else {
+      contributionFactor = (minConfidence - LOW_CONFIDENCE_THRESHOLD) / (HIGH_CONFIDENCE_THRESHOLD - LOW_CONFIDENCE_THRESHOLD);
+    }
+    
+    totalDistance += distance * contributionFactor;
   }
   
   return totalDistance;

@@ -23,6 +23,7 @@ import {
   saveUserSettings,
   ExtendedUserSettings,
 } from "@/utils/dataAccess";
+import { useMotionDetection, setGlobalMotionState, getGlobalMotionState, analyzeGPSMotion, resetGPSMotionBuffer } from "./useMotionDetection";
 
 export interface TripState {
   trips: Trip[];
@@ -57,6 +58,11 @@ export function useTrip() {
   });
 
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
+  const { isMoving, motionState, motionConfidence, startMotionDetection, stopMotionDetection } = useMotionDetection();
+
+  useEffect(() => {
+    setGlobalMotionState(motionState, isMoving, motionConfidence);
+  }, [motionState, isMoving, motionConfidence]);
 
   const loadData = useCallback(async () => {
     try {
@@ -157,6 +163,8 @@ export function useTrip() {
       const interval = intervalMap[state.settings.gpsUpdateFrequency];
       const distance = distanceMap[state.settings.gpsUpdateFrequency];
 
+      resetGPSMotionBuffer();
+      
       try {
         locationSubscription.current = await Location.watchPositionAsync(
           {
@@ -165,6 +173,32 @@ export function useTrip() {
             distanceInterval: distance,
           },
           async (location) => {
+            let motionInfo = getGlobalMotionState();
+            
+            const accelConfidence = motionInfo.state !== "unknown" ? motionInfo.confidence : undefined;
+            
+            const gpsMotion = analyzeGPSMotion({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+              timestamp: location.timestamp,
+              accuracy: location.coords.accuracy || undefined,
+              speed: location.coords.speed,
+              heading: location.coords.heading,
+            }, accelConfidence);
+            
+            if (motionInfo.state === "unknown" || Platform.OS === "web") {
+              motionInfo = {
+                state: gpsMotion.isStationary ? "stationary" : "moving",
+                isMoving: !gpsMotion.isStationary,
+                confidence: gpsMotion.motionConfidence,
+              };
+            } else {
+              motionInfo = {
+                ...motionInfo,
+                confidence: Math.max(motionInfo.confidence, gpsMotion.motionConfidence),
+              };
+            }
+            
             const point: GPSPoint = {
               id: generateId(),
               tripId,
@@ -172,6 +206,8 @@ export function useTrip() {
               longitude: location.coords.longitude,
               timestamp: location.timestamp,
               accuracy: location.coords.accuracy || undefined,
+              isStationary: motionInfo.state === "stationary",
+              motionConfidence: motionInfo.confidence,
             };
 
             await saveGPSPoint(point);
@@ -259,15 +295,17 @@ export function useTrip() {
       siteVisits: [],
     }));
 
+    await startMotionDetection();
     await startLocationTracking(trip.id);
 
     return trip;
-  }, [requestLocationPermission, getCurrentLocation, startLocationTracking]);
+  }, [requestLocationPermission, getCurrentLocation, startLocationTracking, startMotionDetection]);
 
   const endTrip = useCallback(async () => {
     if (!state.activeTrip) return null;
 
     stopLocationTracking();
+    stopMotionDetection();
 
     const location = await getCurrentLocation();
     const finalPoints = await getGPSPoints(state.activeTrip.id);
@@ -295,7 +333,7 @@ export function useTrip() {
     }));
 
     return completedTrip;
-  }, [state.activeTrip, state.trips, stopLocationTracking, getCurrentLocation]);
+  }, [state.activeTrip, state.trips, stopLocationTracking, stopMotionDetection, getCurrentLocation]);
 
   const recordSiteArrival = useCallback(
     async (

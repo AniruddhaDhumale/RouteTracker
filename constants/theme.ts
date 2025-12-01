@@ -10,6 +10,7 @@ export const AppColors = {
   warning: "#FF9800",
   info: "#03A9F4",
   error: "#E91E63",
+  success: "#66BB6A",
   divider: "#E0E0E0",
 };
 

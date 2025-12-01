@@ -196,15 +196,20 @@ export default function ReportsScreen() {
     return csv;
   };
 
-  const handleExportCSV = useCallback(async () => {
-    if (Platform.OS === "web") {
-      Alert.alert(
-        "Export Not Available",
-        "Excel export is only available on mobile devices via Expo Go."
-      );
-      return;
-    }
+  const downloadCSVWeb = (csvContent: string, fileName: string) => {
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", fileName);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
+  const handleExportCSV = useCallback(async () => {
     if (reportType === "dateRange") {
       const start = parseDateDDMMYYYY(startDate);
       const end = parseDateDDMMYYYY(endDate);
@@ -234,6 +239,12 @@ export default function ReportsScreen() {
         : `${startDate.replace(/-/g, "")}_to_${endDate.replace(/-/g, "")}`;
       
       const fileName = `trip-report-${dateStr}.csv`;
+      
+      if (Platform.OS === "web") {
+        downloadCSVWeb(csvContent, fileName);
+        Alert.alert("Success", "Your trip report has been downloaded.");
+        return;
+      }
       
       if (!documentDirectory) {
         Alert.alert("Export Failed", "Unable to access file system.");
@@ -428,6 +439,21 @@ export default function ReportsScreen() {
             value={formatDistance(stats.avgDistance, settings.useKilometers)}
             icon="trending-up"
             iconColor={AppColors.secondary}
+          />
+        </View>
+        <View style={styles.statsRow}>
+          <StatCard
+            title="Avg Trip Time"
+            value={formatDuration(0, stats.avgDuration)}
+            icon="watch"
+            iconColor={AppColors.primary}
+          />
+          <View style={styles.statSpacer} />
+          <StatCard
+            title="Completed Trips"
+            value={filteredTrips.filter(t => t.endTime && !t.isActive).length.toString()}
+            icon="check-circle"
+            iconColor={AppColors.success}
           />
         </View>
       </View>
