@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from "react";
 import { StyleSheet, View, Pressable, Alert, Platform, TextInput, Modal } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import * as FileSystem from "expo-file-system";
+import { documentDirectory, cacheDirectory, writeAsStringAsync, getInfoAsync, EncodingType } from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 
 import { ScreenScrollView } from "@/components/ScreenScrollView";
@@ -246,7 +246,7 @@ export default function ReportsScreen() {
         return;
       }
       
-      const fileDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+      const fileDir = documentDirectory || cacheDirectory;
       if (!fileDir) {
         Alert.alert(
           "File System Unavailable", 
@@ -258,11 +258,11 @@ export default function ReportsScreen() {
       
       const filePath = `${fileDir}${fileName}`;
 
-      await FileSystem.writeAsStringAsync(filePath, csvContent, {
-        encoding: FileSystem.EncodingType.UTF8,
+      await writeAsStringAsync(filePath, csvContent, {
+        encoding: EncodingType.UTF8,
       });
 
-      const fileInfo = await FileSystem.getInfoAsync(filePath);
+      const fileInfo = await getInfoAsync(filePath);
       if (!fileInfo.exists) {
         Alert.alert(
           "Export Issue", 

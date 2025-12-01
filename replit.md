@@ -106,10 +106,18 @@ RouteTracker is a mobile application designed for workers to track their actual 
 - **December 2024 - Advanced GPS Filtering** (utils/gpsFilter.ts):
   - Kalman filter to smooth GPS coordinates and reduce noise
   - Stationary lock requiring sustained movement before counting distance
-  - Dwell zone clustering (20m radius) to prevent drift accumulation
-  - Speed validation (minimum 1.5 km/h, maximum 200 km/h)
-  - Accuracy filtering (rejects points with accuracy >30m)
+  - Dwell zone clustering (8m radius) to prevent drift accumulation
+  - Speed validation (minimum 0.5 km/h, maximum 200 km/h)
+  - Accuracy filtering (rejects points with accuracy >50m)
   - Consecutive moving point requirement before counting segments
+- **December 2024 - GPS Accuracy Improvements**:
+  - Reduced minimum segment distance from 15m to 5m for more accurate tracking
+  - Lowered stationary lock threshold from 25m to 10m to start counting sooner
+  - More lenient accuracy filtering (50m instead of 30m) for better GPS reception
+  - Changed initial state to not be stationary-locked so distance counts from start
+- **December 2024 - CSV Export Fix**:
+  - Fixed file system access using expo-file-system/legacy module
+  - Improved error handling with helpful troubleshooting messages
 
 ## Running the App
 - **Development**: `npm run dev` starts Expo development server
