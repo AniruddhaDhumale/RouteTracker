@@ -103,6 +103,13 @@ RouteTracker is a mobile application designed for workers to track their actual 
   - Maximum daily allowance cap
 - Updated ProfileScreen with Extended Allowance Settings section
 - CSV export now available for trip data
+- **December 2024 - Advanced GPS Filtering** (utils/gpsFilter.ts):
+  - Kalman filter to smooth GPS coordinates and reduce noise
+  - Stationary lock requiring sustained movement before counting distance
+  - Dwell zone clustering (20m radius) to prevent drift accumulation
+  - Speed validation (minimum 1.5 km/h, maximum 200 km/h)
+  - Accuracy filtering (rejects points with accuracy >30m)
+  - Consecutive moving point requirement before counting segments
 
 ## Running the App
 - **Development**: `npm run dev` starts Expo development server

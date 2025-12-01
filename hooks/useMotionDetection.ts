@@ -185,7 +185,7 @@ export function analyzeGPSMotion(location: GPSLocationForMotion, accelerometerCo
   const avgAccuracy = gpsMotionBuffer.reduce((sum, p) => sum + (p.accuracy || 25), 0) / gpsMotionBuffer.length;
   
   const hasDeviceSpeed = location.speed !== undefined && location.speed !== null && location.speed >= 0;
-  const deviceSpeed = hasDeviceSpeed ? location.speed : 0;
+  const deviceSpeed: number = hasDeviceSpeed ? (location.speed as number) : 0;
   const netSpeed = windowTimeSec > 0 ? netDisplacement / windowTimeSec : 0;
   
   const straightness = totalPathDistance > 0 ? netDisplacement / totalPathDistance : 0;
