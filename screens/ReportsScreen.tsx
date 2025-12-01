@@ -247,7 +247,11 @@ export default function ReportsScreen() {
       }
       
       if (!documentDirectory) {
-        Alert.alert("Export Failed", "Unable to access file system.");
+        Alert.alert(
+          "Export Failed", 
+          "Unable to access file system. Please try using the Expo Go app on your mobile device, or access this feature from a web browser.",
+          [{ text: "OK" }]
+        );
         return;
       }
       
