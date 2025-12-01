@@ -226,81 +226,70 @@ export function calculateTotalDistance(points: GPSPoint[]): number {
   const sortedPoints = [...points].sort((a, b) => a.timestamp - b.timestamp);
   let totalDistance = 0;
   
-  // Thresholds for filtering GPS noise vs real movement
-  const MAX_JUMP_KM = 10; // Filter GPS teleportation
-  const MAX_SPEED_KMH = 200; // Max realistic speed
-  const MAX_ACCURACY_METERS = 100; // Skip poor accuracy points
-  const MIN_MOVEMENT_METERS = 10; // Minimum distance to count (filters GPS drift)
-  const MOTION_CONFIDENCE_THRESHOLD = 0.4; // Required confidence to count as moving
+  const MAX_JUMP_KM = 10;
+  const MAX_SPEED_KMH = 200;
+  const MIN_SPEED_KMH = 1.5;
+  const MAX_ACCURACY_METERS = 30;
+  const MIN_MOVEMENT_METERS = 15;
   
-  for (let i = 1; i < sortedPoints.length; i++) {
-    const prev = sortedPoints[i - 1];
+  let lastValidPoint: GPSPoint | null = null;
+  let consecutiveMoving = 0;
+  
+  for (let i = 0; i < sortedPoints.length; i++) {
     const curr = sortedPoints[i];
     
-    // Skip invalid coordinates
-    if ((prev.latitude === 0 && prev.longitude === 0) || 
-        (curr.latitude === 0 && curr.longitude === 0)) {
+    if (curr.latitude === 0 && curr.longitude === 0) {
       continue;
     }
     
-    // STRICT STATIONARY CHECK: If BOTH points are marked stationary, skip entirely
-    // This is the key check - if you're not moving, don't count any distance
-    if (curr.isStationary === true && prev.isStationary === true) {
-      continue;
-    }
-    
-    // Check motion confidence - at least one point must show movement confidence
-    const currConfidence = curr.motionConfidence ?? 0;
-    const prevConfidence = prev.motionConfidence ?? 0;
-    const maxConfidence = Math.max(currConfidence, prevConfidence);
-    
-    // If motion confidence is very low on both points, skip (likely stationary)
-    if (maxConfidence < MOTION_CONFIDENCE_THRESHOLD) {
-      continue;
-    }
-    
-    // Skip very poor accuracy points
-    const prevAccuracy = prev.accuracy || 15;
     const currAccuracy = curr.accuracy || 15;
-    if (prevAccuracy > MAX_ACCURACY_METERS || currAccuracy > MAX_ACCURACY_METERS) {
+    if (currAccuracy > MAX_ACCURACY_METERS) {
       continue;
     }
     
-    // Calculate segment distance using Haversine
+    if (curr.isStationary === true) {
+      consecutiveMoving = 0;
+      continue;
+    }
+    
+    consecutiveMoving++;
+    
+    if (consecutiveMoving < 2) {
+      lastValidPoint = curr;
+      continue;
+    }
+    
+    if (!lastValidPoint) {
+      lastValidPoint = curr;
+      continue;
+    }
+    
     const segmentDistance = calculateDistance(
-      prev.latitude, prev.longitude,
+      lastValidPoint.latitude, lastValidPoint.longitude,
       curr.latitude, curr.longitude
     );
     const segmentDistanceMeters = segmentDistance * 1000;
     
-    // Skip if movement is too small (GPS drift when stationary)
-    // This filters out the typical 3-10m GPS jitter
     if (segmentDistanceMeters < MIN_MOVEMENT_METERS) {
       continue;
     }
     
-    // Skip unrealistic GPS jumps
     if (segmentDistance >= MAX_JUMP_KM) {
+      lastValidPoint = curr;
       continue;
     }
     
-    // Check for unrealistic speed
-    const timeDiffMs = curr.timestamp - prev.timestamp;
+    const timeDiffMs = curr.timestamp - lastValidPoint.timestamp;
     const timeDiffHours = timeDiffMs / (1000 * 60 * 60);
     if (timeDiffHours > 0) {
       const speedKmh = segmentDistance / timeDiffHours;
-      if (speedKmh > MAX_SPEED_KMH) {
+      if (speedKmh > MAX_SPEED_KMH || speedKmh < MIN_SPEED_KMH) {
         continue;
       }
     }
     
-    // Movement passed all checks - count it
-    // Scale by motion confidence for borderline cases
-    if (maxConfidence >= 0.7) {
-      totalDistance += segmentDistance; // High confidence - full distance
-    } else {
-      totalDistance += segmentDistance * maxConfidence; // Lower confidence - scaled
-    }
+    totalDistance += segmentDistance;
+    lastValidPoint = curr;
   }
   
   return totalDistance;

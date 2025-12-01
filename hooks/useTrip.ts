@@ -5,7 +5,6 @@ import {
   Trip,
   GPSPoint,
   SiteVisit,
-  calculateTotalDistance,
   generateId,
 } from "@/utils/storage";
 import {
@@ -24,6 +23,7 @@ import {
   ExtendedUserSettings,
 } from "@/utils/dataAccess";
 import { useMotionDetection, setGlobalMotionState, getGlobalMotionState, analyzeGPSMotion, resetGPSMotionBuffer } from "./useMotionDetection";
+import { getGPSFilter, resetGPSFilter, calculateFilteredDistance } from "@/utils/gpsFilter";
 
 export interface TripState {
   trips: Trip[];
@@ -164,6 +164,7 @@ export function useTrip() {
       const distance = distanceMap[state.settings.gpsUpdateFrequency];
 
       resetGPSMotionBuffer();
+      resetGPSFilter();
       
       try {
         locationSubscription.current = await Location.watchPositionAsync(
@@ -199,6 +200,16 @@ export function useTrip() {
               };
             }
             
+            const gpsFilter = getGPSFilter();
+            const filterResult = gpsFilter.processPoint(
+              location.coords.latitude,
+              location.coords.longitude,
+              location.timestamp,
+              location.coords.accuracy || undefined,
+              location.coords.speed,
+              motionInfo.confidence
+            );
+            
             const point: GPSPoint = {
               id: generateId(),
               tripId,
@@ -206,7 +217,7 @@ export function useTrip() {
               longitude: location.coords.longitude,
               timestamp: location.timestamp,
               accuracy: location.coords.accuracy || undefined,
-              isStationary: motionInfo.state === "stationary",
+              isStationary: !filterResult.isMoving,
               motionConfidence: motionInfo.confidence,
             };
 
@@ -214,7 +225,9 @@ export function useTrip() {
 
             setState((prev) => {
               const newPoints = [...prev.gpsPoints, point];
-              const totalDistance = calculateTotalDistance(newPoints);
+              
+              let totalDistance = prev.activeTrip?.totalDistance || 0;
+              totalDistance += filterResult.distance;
 
               if (prev.activeTrip) {
                 const updatedTrip = { ...prev.activeTrip, totalDistance };
@@ -306,10 +319,11 @@ export function useTrip() {
 
     stopLocationTracking();
     stopMotionDetection();
+    resetGPSFilter();
 
     const location = await getCurrentLocation();
     const finalPoints = await getGPSPoints(state.activeTrip.id);
-    const totalDistance = calculateTotalDistance(finalPoints);
+    const totalDistance = calculateFilteredDistance(finalPoints);
 
     const completedTrip: Trip = {
       ...state.activeTrip,
