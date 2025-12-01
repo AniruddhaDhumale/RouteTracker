@@ -22,33 +22,37 @@ class GPSFilter {
   private kalmanState: KalmanState | null = null;
   private pointBuffer: FilteredPoint[] = [];
   private lastValidPoint: FilteredPoint | null = null;
-  private isStationaryLocked = false;
+  private isStationaryLocked = true;
   private lockReleaseTime = 0;
   private dwellCenter: { lat: number; lon: number } | null = null;
   private consecutiveStationaryCount = 0;
   private consecutiveMovingCount = 0;
+  private recentPositions: { lat: number; lon: number; timestamp: number }[] = [];
 
-  private readonly BUFFER_SIZE = 15;
-  private readonly STATIONARY_LOCK_RELEASE_METERS = 10;
-  private readonly STATIONARY_LOCK_RELEASE_SECONDS = 15;
-  private readonly DWELL_RADIUS_METERS = 8;
-  private readonly MIN_SPEED_MPS = 0.3;
-  private readonly MIN_ACCURACY_METERS = 50;
-  private readonly MIN_SEGMENT_METERS = 5;
-  private readonly CONSECUTIVE_MOVING_THRESHOLD = 2;
-  private readonly CONSECUTIVE_STATIONARY_THRESHOLD = 5;
-  private readonly PROCESS_NOISE = 3;
-  private readonly MEASUREMENT_NOISE_BASE = 10;
+  private readonly BUFFER_SIZE = 20;
+  private readonly STATIONARY_LOCK_RELEASE_METERS = 15;
+  private readonly STATIONARY_LOCK_RELEASE_SECONDS = 20;
+  private readonly DWELL_RADIUS_METERS = 12;
+  private readonly MIN_SPEED_MPS = 0.8;
+  private readonly MIN_ACCURACY_METERS = 35;
+  private readonly MIN_SEGMENT_METERS = 10;
+  private readonly CONSECUTIVE_MOVING_THRESHOLD = 3;
+  private readonly CONSECUTIVE_STATIONARY_THRESHOLD = 4;
+  private readonly PROCESS_NOISE = 2;
+  private readonly MEASUREMENT_NOISE_BASE = 12;
+  private readonly VARIANCE_WINDOW_SIZE = 10;
+  private readonly MAX_STATIONARY_VARIANCE = 8;
 
   reset(): void {
     this.kalmanState = null;
     this.pointBuffer = [];
     this.lastValidPoint = null;
-    this.isStationaryLocked = false;
+    this.isStationaryLocked = true;
     this.lockReleaseTime = 0;
     this.dwellCenter = null;
     this.consecutiveStationaryCount = 0;
     this.consecutiveMovingCount = 0;
+    this.recentPositions = [];
   }
 
   private haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -104,14 +108,29 @@ class GPSFilter {
     return { lat: newLat, lon: newLon };
   }
 
+  private calculatePositionVariance(): number {
+    if (this.recentPositions.length < 3) return 0;
+
+    const centroidLat = this.recentPositions.reduce((sum, p) => sum + p.lat, 0) / this.recentPositions.length;
+    const centroidLon = this.recentPositions.reduce((sum, p) => sum + p.lon, 0) / this.recentPositions.length;
+
+    let totalVariance = 0;
+    for (const pos of this.recentPositions) {
+      const dist = this.haversineDistance(centroidLat, centroidLon, pos.lat, pos.lon);
+      totalVariance += dist * dist;
+    }
+
+    return Math.sqrt(totalVariance / this.recentPositions.length);
+  }
+
   private checkStationaryLock(): void {
-    if (this.pointBuffer.length < 3) return;
+    if (this.pointBuffer.length < 4) return;
 
     const now = this.pointBuffer[this.pointBuffer.length - 1].timestamp;
     const windowStart = now - this.STATIONARY_LOCK_RELEASE_SECONDS * 1000;
 
     const recentPoints = this.pointBuffer.filter(p => p.timestamp >= windowStart);
-    if (recentPoints.length < 2) return;
+    if (recentPoints.length < 3) return;
 
     const oldest = recentPoints[0];
     const newest = recentPoints[recentPoints.length - 1];
@@ -122,13 +141,15 @@ class GPSFilter {
 
     const avgSpeed = recentPoints.reduce((sum, p) => sum + p.speed, 0) / recentPoints.length;
     const avgAccuracy = recentPoints.reduce((sum, p) => sum + p.accuracy, 0) / recentPoints.length;
+    const positionVariance = this.calculatePositionVariance();
 
     if (this.isStationaryLocked) {
       if (
         netDisplacement > this.STATIONARY_LOCK_RELEASE_METERS &&
         avgSpeed >= this.MIN_SPEED_MPS &&
-        avgAccuracy < this.MIN_ACCURACY_METERS &&
-        this.consecutiveMovingCount >= this.CONSECUTIVE_MOVING_THRESHOLD
+        avgAccuracy <= this.MIN_ACCURACY_METERS &&
+        this.consecutiveMovingCount >= this.CONSECUTIVE_MOVING_THRESHOLD &&
+        positionVariance > this.MAX_STATIONARY_VARIANCE
       ) {
         this.isStationaryLocked = false;
         this.lockReleaseTime = now;
@@ -137,9 +158,8 @@ class GPSFilter {
       }
     } else {
       if (
-        netDisplacement < 10 &&
-        avgSpeed < 0.3 &&
-        this.consecutiveStationaryCount >= this.CONSECUTIVE_STATIONARY_THRESHOLD
+        (netDisplacement < 12 && avgSpeed < 0.5) ||
+        (positionVariance < this.MAX_STATIONARY_VARIANCE && this.consecutiveStationaryCount >= this.CONSECUTIVE_STATIONARY_THRESHOLD)
       ) {
         this.isStationaryLocked = true;
         this.dwellCenter = { lat: newest.latitude, lon: newest.longitude };
@@ -156,20 +176,30 @@ class GPSFilter {
     speed: number | null | undefined,
     motionConfidence: number
   ): { distance: number; isMoving: boolean; filteredLat: number; filteredLon: number } {
-    const acc = accuracy ?? 15;
+    const acc = accuracy ?? 20;
     const spd = speed ?? 0;
 
     const filtered = this.applyKalmanFilter(latitude, longitude, acc, timestamp);
 
-    const isMovingBySpeed = spd >= this.MIN_SPEED_MPS;
-    const isMovingByConfidence = motionConfidence >= 0.5;
+    this.recentPositions.push({ lat: filtered.lat, lon: filtered.lon, timestamp });
+    if (this.recentPositions.length > this.VARIANCE_WINDOW_SIZE) {
+      this.recentPositions.shift();
+    }
 
-    if (isMovingBySpeed || isMovingByConfidence) {
+    const adjustedConfidence = spd < 0.4 ? Math.min(motionConfidence, 0.3) : motionConfidence;
+    const isMovingBySpeed = spd >= this.MIN_SPEED_MPS;
+    const isMovingByConfidence = adjustedConfidence >= 0.6;
+
+    if (isMovingBySpeed && isMovingByConfidence) {
       this.consecutiveMovingCount++;
       this.consecutiveStationaryCount = 0;
-    } else {
+    } else if (!isMovingBySpeed && !isMovingByConfidence) {
       this.consecutiveStationaryCount++;
       this.consecutiveMovingCount = 0;
+    } else {
+      if (this.consecutiveMovingCount > 0) {
+        this.consecutiveMovingCount = Math.max(0, this.consecutiveMovingCount - 1);
+      }
     }
 
     const point: FilteredPoint = {
@@ -219,6 +249,16 @@ class GPSFilter {
       }
     }
 
+    const positionVariance = this.calculatePositionVariance();
+    if (positionVariance < this.MAX_STATIONARY_VARIANCE && this.recentPositions.length >= 5) {
+      return {
+        distance: 0,
+        isMoving: false,
+        filteredLat: filtered.lat,
+        filteredLon: filtered.lon,
+      };
+    }
+
     if (!this.lastValidPoint) {
       this.lastValidPoint = point;
       return {
@@ -246,7 +286,7 @@ class GPSFilter {
     const timeDiff = (timestamp - this.lastValidPoint.timestamp) / 1000;
     if (timeDiff > 0) {
       const impliedSpeed = segmentDistance / timeDiff;
-      if (impliedSpeed > 55) {
+      if (impliedSpeed > 55 || impliedSpeed < 0.5) {
         return {
           distance: 0,
           isMoving: false,
@@ -257,6 +297,15 @@ class GPSFilter {
     }
 
     if (acc > this.MIN_ACCURACY_METERS) {
+      return {
+        distance: 0,
+        isMoving: false,
+        filteredLat: filtered.lat,
+        filteredLon: filtered.lon,
+      };
+    }
+
+    if (this.consecutiveMovingCount < this.CONSECUTIVE_MOVING_THRESHOLD) {
       return {
         distance: 0,
         isMoving: false,
@@ -318,20 +367,58 @@ export function calculateFilteredDistance(points: GPSPoint[]): number {
   const sortedPoints = [...points].sort((a, b) => a.timestamp - b.timestamp);
   
   let totalDistance = 0;
-  const MIN_SEGMENT_METERS = 5;
-  const MAX_ACCURACY_METERS = 50;
-  const MIN_SPEED_KMH = 0.5;
+  const MIN_SEGMENT_METERS = 10;
+  const MAX_ACCURACY_METERS = 35;
+  const MIN_SPEED_KMH = 1.5;
   const MAX_SPEED_KMH = 200;
+  const VARIANCE_WINDOW = 8;
+  const MAX_VARIANCE_METERS = 10;
   
   let lastValidPoint: GPSPoint | null = null;
   let stationaryCount = 0;
   let movingCount = 0;
+  const recentPoints: GPSPoint[] = [];
+  
+  const haversine = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c * 1000;
+  };
+
+  const calculateVariance = (pts: GPSPoint[]): number => {
+    if (pts.length < 3) return 0;
+    const centroidLat = pts.reduce((sum, p) => sum + p.latitude, 0) / pts.length;
+    const centroidLon = pts.reduce((sum, p) => sum + p.longitude, 0) / pts.length;
+    let totalVar = 0;
+    for (const p of pts) {
+      const dist = haversine(centroidLat, centroidLon, p.latitude, p.longitude);
+      totalVar += dist * dist;
+    }
+    return Math.sqrt(totalVar / pts.length);
+  };
   
   for (const point of sortedPoints) {
     if (point.latitude === 0 && point.longitude === 0) continue;
     
-    const accuracy = point.accuracy ?? 15;
+    const accuracy = point.accuracy ?? 20;
     if (accuracy > MAX_ACCURACY_METERS) continue;
+
+    recentPoints.push(point);
+    if (recentPoints.length > VARIANCE_WINDOW) {
+      recentPoints.shift();
+    }
+
+    const variance = calculateVariance(recentPoints);
+    if (variance < MAX_VARIANCE_METERS && recentPoints.length >= 5) {
+      stationaryCount++;
+      movingCount = 0;
+      continue;
+    }
     
     if (point.isStationary === true) {
       stationaryCount++;
@@ -342,7 +429,7 @@ export function calculateFilteredDistance(points: GPSPoint[]): number {
     movingCount++;
     stationaryCount = 0;
     
-    if (movingCount < 2) {
+    if (movingCount < 3) {
       lastValidPoint = point;
       continue;
     }
@@ -352,16 +439,10 @@ export function calculateFilteredDistance(points: GPSPoint[]): number {
       continue;
     }
     
-    const R = 6371;
-    const dLat = (point.latitude - lastValidPoint.latitude) * Math.PI / 180;
-    const dLon = (point.longitude - lastValidPoint.longitude) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lastValidPoint.latitude * Math.PI / 180) * 
-              Math.cos(point.latitude * Math.PI / 180) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const segmentDistanceKm = R * c;
-    const segmentDistanceMeters = segmentDistanceKm * 1000;
+    const segmentDistanceMeters = haversine(
+      lastValidPoint.latitude, lastValidPoint.longitude,
+      point.latitude, point.longitude
+    );
     
     if (segmentDistanceMeters < MIN_SEGMENT_METERS) {
       continue;
@@ -371,14 +452,14 @@ export function calculateFilteredDistance(points: GPSPoint[]): number {
     const timeDiffHours = timeDiffMs / (1000 * 60 * 60);
     
     if (timeDiffHours > 0) {
-      const speedKmh = segmentDistanceKm / timeDiffHours;
+      const speedKmh = (segmentDistanceMeters / 1000) / timeDiffHours;
       
       if (speedKmh < MIN_SPEED_KMH || speedKmh > MAX_SPEED_KMH) {
         continue;
       }
     }
     
-    totalDistance += segmentDistanceKm;
+    totalDistance += segmentDistanceMeters / 1000;
     lastValidPoint = point;
   }
 
