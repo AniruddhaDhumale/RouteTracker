@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from "react";
 import { StyleSheet, View, Pressable, Alert, Platform, TextInput, Modal } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { documentDirectory, writeAsStringAsync, getInfoAsync, EncodingType } from "expo-file-system";
+import { documentDirectory, cacheDirectory, writeAsStringAsync, getInfoAsync, EncodingType } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 
 import { ScreenScrollView } from "@/components/ScreenScrollView";
@@ -246,7 +246,8 @@ export default function ReportsScreen() {
         return;
       }
       
-      if (!documentDirectory) {
+      const fileDir = documentDirectory || cacheDirectory;
+      if (!fileDir) {
         Alert.alert(
           "Export Failed", 
           "Unable to access file system. Please try using the Expo Go app on your mobile device, or access this feature from a web browser.",
@@ -255,7 +256,7 @@ export default function ReportsScreen() {
         return;
       }
       
-      const filePath = `${documentDirectory}${fileName}`;
+      const filePath = `${fileDir}${fileName}`;
 
       await writeAsStringAsync(filePath, csvContent, {
         encoding: EncodingType.UTF8,
