@@ -14,7 +14,9 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "RouteTracker needs access to your location to track your travel route and calculate distance traveled.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "RouteTracker needs access to your location in the background to continuously track your travel route during active trips.",
-        "UIBackgroundModes": ["location"]
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "android": {
@@ -32,7 +34,9 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION"
+        "FOREGROUND_SERVICE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
@@ -64,6 +68,11 @@
     ],
     "experiments": {
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "8b768d88-1126-46e5-9121-3a6bc2764547"
+      }
     }
   }
 }
