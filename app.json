@@ -36,7 +36,11 @@
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_MEDIA_AUDIO"
       ]
     },
     "web": {
@@ -63,6 +67,13 @@
           "locationAlwaysAndWhenInUsePermission": "RouteTracker needs access to your location to track your travel route and calculate distance traveled.",
           "locationAlwaysPermission": "RouteTracker needs background location access to continuously track your travel route during active trips.",
           "locationWhenInUsePermission": "RouteTracker needs access to your location to track your travel route."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow RouteTracker to save your trip reports to the device.",
+          "savePhotosPermission": "Allow RouteTracker to save trip reports to Photos."
         }
       ]
     ],

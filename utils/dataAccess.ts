@@ -50,11 +50,17 @@ export async function initializeDataLayer(): Promise<boolean> {
   if (!initializationPromise) {
     initializationPromise = (async () => {
       try {
+        console.log("[dataAccess] Initializing database layer...");
         await initializeDatabase();
+        console.log("[dataAccess] Database initialized successfully");
         isDBInitialized = true;
         return true;
       } catch (error) {
-        console.error("Failed to initialize SQLite database:", error);
+        console.error("[dataAccess] CRITICAL - Failed to initialize SQLite database:", error);
+        console.error("[dataAccess] Error details:", {
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : "no stack",
+        });
         isDBInitialized = false;
         initializationPromise = null;
         return false;
@@ -78,12 +84,15 @@ async function ensureDBInitialized(): Promise<boolean> {
 export async function getTrips(): Promise<Trip[]> {
   if (await ensureDBInitialized()) {
     try {
-      return await getTripsFromDB();
+      const trips = await getTripsFromDB();
+      console.log("[dataAccess] Loaded", trips.length, "trips from SQLite");
+      return trips;
     } catch (error) {
-      console.error("SQLite getTrips failed, falling back:", error);
+      console.error("[dataAccess] SQLite getTrips failed, falling back to AsyncStorage:", error);
       resetDBState();
     }
   }
+  console.log("[dataAccess] Using AsyncStorage fallback for getTrips");
   return getTripsAsync();
 }
 

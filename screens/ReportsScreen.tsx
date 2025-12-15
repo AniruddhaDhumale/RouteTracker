@@ -2,7 +2,14 @@ import React, { useState, useMemo, useCallback } from "react";
 import { StyleSheet, View, Pressable, Alert, Platform, TextInput, Modal } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { documentDirectory, cacheDirectory, writeAsStringAsync, getInfoAsync, EncodingType } from "expo-file-system/legacy";
+import { 
+  documentDirectory, 
+  cacheDirectory, 
+  writeAsStringAsync, 
+  getInfoAsync, 
+  EncodingType,
+  StorageAccessFramework 
+} from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 
 import { ScreenScrollView } from "@/components/ScreenScrollView";
@@ -209,6 +216,44 @@ export default function ReportsScreen() {
     URL.revokeObjectURL(url);
   };
 
+  const saveToDeviceStorage = async (csvContent: string, fileName: string): Promise<boolean> => {
+    if (Platform.OS === "android") {
+      try {
+        const permissions = await StorageAccessFramework.requestDirectoryPermissionsAsync();
+        
+        if (!permissions.granted) {
+          Alert.alert(
+            "Permission Required",
+            "Please grant storage permission to save the report to your device.",
+            [{ text: "OK" }]
+          );
+          return false;
+        }
+
+        const fileUri = await StorageAccessFramework.createFileAsync(
+          permissions.directoryUri,
+          fileName,
+          "text/csv"
+        );
+
+        await writeAsStringAsync(fileUri, csvContent, {
+          encoding: EncodingType.UTF8,
+        });
+
+        Alert.alert(
+          "Report Saved",
+          `Your trip report "${fileName}" has been saved to your selected folder.`,
+          [{ text: "OK" }]
+        );
+        return true;
+      } catch (error) {
+        console.error("Android save error:", error);
+        return false;
+      }
+    }
+    return false;
+  };
+
   const handleExportCSV = useCallback(async () => {
     if (reportType === "dateRange") {
       const start = parseDateDDMMYYYY(startDate);
@@ -245,6 +290,13 @@ export default function ReportsScreen() {
         Alert.alert("Success", "Your trip report has been downloaded.");
         return;
       }
+
+      if (Platform.OS === "android") {
+        const saved = await saveToDeviceStorage(csvContent, fileName);
+        if (saved) {
+          return;
+        }
+      }
       
       const fileDir = documentDirectory || cacheDirectory;
       if (!fileDir) {
@@ -276,9 +328,14 @@ export default function ReportsScreen() {
       if (canShare) {
         await Sharing.shareAsync(filePath, {
           mimeType: "text/csv",
-          dialogTitle: "Export Trip Report",
+          dialogTitle: "Save Trip Report",
           UTI: "public.comma-separated-values-text",
         });
+        Alert.alert(
+          "Report Ready",
+          "Use the share menu to save the report to Files or your preferred location.",
+          [{ text: "OK" }]
+        );
       } else {
         Alert.alert(
           "Sharing Not Available",

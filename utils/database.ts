@@ -36,21 +36,25 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
 
 export async function initializeDatabase(): Promise<void> {
   if (Platform.OS === "web") {
-    console.log("SQLite not available on web, using fallback storage");
+    console.log("[database] SQLite not available on web, using fallback storage");
     return;
   }
 
   if (isInitialized) {
+    console.log("[database] Database already initialized");
     return;
   }
 
   try {
+    console.log("[database] Opening database:", DATABASE_NAME);
     if (!db) {
       db = await SQLite.openDatabaseAsync(DATABASE_NAME);
+      console.log("[database] Database opened successfully");
     }
     const database = db;
 
     // Create tables one at a time for better compatibility
+    console.log("[database] Creating trips table...");
     await database.runAsync(`
       CREATE TABLE IF NOT EXISTS trips (
         id TEXT PRIMARY KEY,
@@ -65,6 +69,7 @@ export async function initializeDatabase(): Promise<void> {
       )
     `);
 
+    console.log("[database] Creating gps_points table...");
     await database.runAsync(`
       CREATE TABLE IF NOT EXISTS gps_points (
         id TEXT PRIMARY KEY,
@@ -77,6 +82,7 @@ export async function initializeDatabase(): Promise<void> {
       )
     `);
 
+    console.log("[database] Creating site_visits table...");
     await database.runAsync(`
       CREATE TABLE IF NOT EXISTS site_visits (
         id TEXT PRIMARY KEY,
@@ -101,6 +107,7 @@ export async function initializeDatabase(): Promise<void> {
       )
     `);
 
+    console.log("[database] Creating user_settings table...");
     await database.runAsync(`
       CREATE TABLE IF NOT EXISTS user_settings (
         id INTEGER PRIMARY KEY DEFAULT 1,
@@ -115,6 +122,7 @@ export async function initializeDatabase(): Promise<void> {
       )
     `);
 
+    console.log("[database] Creating indexes...");
     await database.runAsync(
       "CREATE INDEX IF NOT EXISTS idx_gps_points_tripId ON gps_points(tripId)"
     );
@@ -129,6 +137,7 @@ export async function initializeDatabase(): Promise<void> {
     );
 
     // Initialize default settings
+    console.log("[database] Initializing default settings...");
     const settingsResult = await database.getFirstAsync<{ count: number }>(
       "SELECT COUNT(*) as count FROM user_settings"
     );
@@ -136,16 +145,22 @@ export async function initializeDatabase(): Promise<void> {
       await database.runAsync(
         "INSERT INTO user_settings (id) VALUES (1)"
       );
+      console.log("[database] Default settings created");
     }
 
     isInitialized = true;
-    console.log("SQLite database initialized successfully");
+    console.log("[database] ✓ SQLite database initialized successfully");
   } catch (error) {
-    console.error("Failed to initialize SQLite database:", error);
-    console.log("Falling back to AsyncStorage");
+    console.error("[database] ✗ CRITICAL - Failed to initialize SQLite database:", error);
+    console.error("[database] Error details:", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : "no stack",
+    });
+    console.log("[database] Falling back to AsyncStorage");
     db = null;
     isInitialized = false;
     initPromise = null;
+    throw error; // Re-throw to let caller know initialization failed
   }
 }
 

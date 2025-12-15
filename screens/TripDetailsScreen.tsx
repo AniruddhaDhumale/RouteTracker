@@ -6,7 +6,7 @@ import { ScreenScrollView } from "@/components/ScreenScrollView";
 import { StatCard } from "@/components/StatCard";
 import { TimelineEvent, EventType } from "@/components/TimelineEvent";
 import { ThemedText } from "@/components/ThemedText";
-import { TripMap } from "@/components/TripMap";
+import { TripMap } from "@/components/TripMap.native";
 import { useTheme } from "@/hooks/useTheme";
 import { useTripContext } from "@/context/TripContext";
 import { Spacing, BorderRadius, AppColors } from "@/constants/theme";

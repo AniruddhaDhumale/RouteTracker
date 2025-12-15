@@ -69,7 +69,7 @@ export default function SiteVisitModal({
               text: "Open Settings",
               onPress: async () => {
                 try {
-                  const { Linking } = await import("expo-linking");
+                  const Linking = (await import("expo-linking")).default;
                   await Linking.openSettings();
                 } catch {
                   Alert.alert("Error", "Unable to open Settings.");
@@ -122,7 +122,7 @@ export default function SiteVisitModal({
               text: "Open Settings",
               onPress: async () => {
                 try {
-                  const { Linking } = await import("expo-linking");
+                  const Linking = (await import("expo-linking")).default;
                   await Linking.openSettings();
                 } catch {
                   Alert.alert("Error", "Unable to open Settings.");

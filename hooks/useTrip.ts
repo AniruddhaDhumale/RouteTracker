@@ -165,7 +165,7 @@ export function useTrip() {
 
       resetGPSMotionBuffer();
       resetGPSFilter();
-      
+
       try {
         locationSubscription.current = await Location.watchPositionAsync(
           {
@@ -175,9 +175,9 @@ export function useTrip() {
           },
           async (location) => {
             let motionInfo = getGlobalMotionState();
-            
+
             const accelConfidence = motionInfo.state !== "unknown" ? motionInfo.confidence : undefined;
-            
+
             const gpsMotion = analyzeGPSMotion({
               latitude: location.coords.latitude,
               longitude: location.coords.longitude,
@@ -186,7 +186,7 @@ export function useTrip() {
               speed: location.coords.speed,
               heading: location.coords.heading,
             }, accelConfidence);
-            
+
             if (motionInfo.state === "unknown" || Platform.OS === "web") {
               motionInfo = {
                 state: gpsMotion.isStationary ? "stationary" : "moving",
@@ -199,7 +199,7 @@ export function useTrip() {
                 confidence: Math.max(motionInfo.confidence, gpsMotion.motionConfidence),
               };
             }
-            
+
             const gpsFilter = getGPSFilter();
             const filterResult = gpsFilter.processPoint(
               location.coords.latitude,
@@ -209,7 +209,7 @@ export function useTrip() {
               location.coords.speed,
               motionInfo.confidence
             );
-            
+
             const point: GPSPoint = {
               id: generateId(),
               tripId,
@@ -225,7 +225,7 @@ export function useTrip() {
 
             setState((prev) => {
               const newPoints = [...prev.gpsPoints, point];
-              
+
               let totalDistance = prev.activeTrip?.totalDistance || 0;
               totalDistance += filterResult.distance;
 
@@ -323,7 +323,13 @@ export function useTrip() {
 
     const location = await getCurrentLocation();
     const finalPoints = await getGPSPoints(state.activeTrip.id);
-    const totalDistance = calculateFilteredDistance(finalPoints);
+
+    // Prefer the distance we tracked live during the trip.
+    // Only fall back to batch calculation if it's zero.
+    let totalDistance = state.activeTrip.totalDistance;
+    if (!totalDistance || totalDistance <= 0) {
+      totalDistance = calculateFilteredDistance(finalPoints);
+    }
 
     const completedTrip: Trip = {
       ...state.activeTrip,
@@ -335,7 +341,7 @@ export function useTrip() {
     };
 
     await saveTrip(completedTrip);
-    
+
     const updatedTrips = [...state.trips, completedTrip];
 
     setState((prev) => ({
@@ -468,17 +474,17 @@ export function useTrip() {
     const rate = state.settings.useKilometers
       ? state.settings.allowanceRate
       : state.settings.allowanceRatePerMile || 0.8;
-    
+
     let allowance = distance * rate;
-    
+
     if (state.settings.minDistanceForAllowance && distance < state.settings.minDistanceForAllowance) {
       allowance = 0;
     }
-    
+
     if (state.settings.maxDailyAllowance && state.settings.maxDailyAllowance > 0) {
       allowance = Math.min(allowance, state.settings.maxDailyAllowance);
     }
-    
+
     return allowance;
   }, [getTodaysDistance, state.settings]);
 

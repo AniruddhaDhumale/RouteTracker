@@ -16,19 +16,33 @@ type HistoryScreenProps = {
 };
 
 export default function HistoryScreen({ navigation }: HistoryScreenProps) {
-  const { trips, settings, loadData } = useTripContext();
+  const { trips, settings, loadData, isLoading } = useTripContext();
   const [siteVisits, setSiteVisits] = useState<SiteVisit[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
-      loadData();
+      loadData()
+        .then(() => {
+          console.log("[HistoryScreen] Data loaded successfully");
+          setError(null);
+        })
+        .catch((err) => {
+          console.error("[HistoryScreen] Error loading data:", err);
+          setError(err instanceof Error ? err.message : "Failed to load trip history");
+        });
       loadSiteVisits();
     }, [loadData])
   );
 
   const loadSiteVisits = async () => {
-    const visits = await getAllSiteVisits();
-    setSiteVisits(visits);
+    try {
+      const visits = await getAllSiteVisits();
+      setSiteVisits(visits);
+      console.log("[HistoryScreen] Loaded", visits.length, "site visits");
+    } catch (err) {
+      console.error("[HistoryScreen] Error loading site visits:", err);
+    }
   };
 
   const getSiteVisitCount = (tripId: string) => {
@@ -48,11 +62,25 @@ export default function HistoryScreen({ navigation }: HistoryScreenProps) {
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
-      <EmptyState
-        icon="clock"
-        title="No Trip History"
-        message="Your completed trips will appear here. Start a trip from the Home tab to get started."
-      />
+      {error ? (
+        <EmptyState
+          icon="alert-circle"
+          title="Error Loading History"
+          message={error}
+        />
+      ) : isLoading ? (
+        <EmptyState
+          icon="loader"
+          title="Loading..."
+          message="Please wait while we load your trips"
+        />
+      ) : (
+        <EmptyState
+          icon="clock"
+          title="No Trip History"
+          message="Your completed trips will appear here. Start a trip from the Home tab to get started."
+        />
+      )}
     </View>
   );
 
