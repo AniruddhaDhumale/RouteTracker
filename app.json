@@ -81,6 +81,7 @@
       "reactCompiler": true
     },
     "extra": {
+      "backendUrl": "https://72618b97-c6ac-4665-af13-9cb0bd4a6f9b-00-1lm55jnexda6c.picard.replit.dev",
       "eas": {
         "projectId": "8b768d88-1126-46e5-9121-3a6bc2764547"
       }
